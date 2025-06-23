@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Bracket Challenge</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 2em;
+            background-color: #f0f4f7; color: #333;
+        }
+        h1, h2 { text-align: center; color: #005A31; }
+        h1 { font-size: 2.5em; margin-bottom: 0.5em; }
+        h2 { font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }
+        .bracket-container { display: flex; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
+        .round { display: flex; flex-direction: column; justify-content: space-around; margin: 0 10px; flex-shrink: 0; }
+        .round-title { font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 20px; color: #4A0072; min-width: 250px; }
+        .matchup { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 30px; width: 250px; position: relative; }
+        .player { display: block; margin: 5px 0; cursor: pointer; }
+        .player-name { display: inline-block; min-width: 150px; font-size: 1em; color: #555; pointer-events: none; }
+        .player-name.winner { font-weight: bold; color: #005A31; }
+        .tbd { font-style: italic; color: #999; }
+        button#export-btn { display: block; width: 300px; margin: 2em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }
+        button#export-btn:hover { background-color: #005A31; transform: scale(1.05); }
+    </style>
+</head>
+<body>
+    <h1>Tournament Bracket Challenge</h1>
+    <h2>Men's Singles</h2>
+    <div id="mens-bracket" class="bracket-container"></div>
+    <h2>Women's Singles</h2>
+    <div id="womens-bracket" class="bracket-container"></div>
+    <button id="export-btn" onclick="exportToCSV()">Lock In & Export My Bracket!</button>
+
+    <script>
+        const initialMatchups = {
+    "mens": [
+        [
+            "Jannik Sinner",
+            "Miomir Kecmanovic"
+        ],
+        [
+            "Denis Shapovalov",
+            "Ben Shelton"
+        ],
+        [
+            "Grigor Dimitrov",
+            "Gael Monfils"
+        ],
+        [
+            "Jan-Lennard Struff",
+            "Daniil Medvedev"
+        ],
+        [
+            "Carlos Alcaraz",
+            "Frances Tiafoe"
+        ],
+        [
+            "Brandon Nakashima",
+            "Ugo Humbert"
+        ],
+        [
+            "Tommy Paul",
+            "Alexander Bublik"
+        ],
+        [
+            "Roberto Bautista Agut",
+            "Fabio Fognini"
+        ],
+        [
+            "Francisco Comesana",
+            "Lorenzo Musetti"
+        ],
+        [
+            "G. Mpetshi Perricard",
+            "Emil Ruusuvuori"
+        ],
+        [
+            "Taylor Fritz",
+            "Alejandro Tabilo"
+        ],
+        [
+            "Cameron Norrie",
+            "Alexander Zverev"
+        ],
+        [
+            "Arthur Fils",
+            "Roman Safiullin"
+        ],
+        [
+            "Lucas Pouille",
+            "Alex de Minaur"
+        ],
+        [
+            "Holger Rune",
+            "Quentin Halys"
+        ],
+        [
+            "Alex Popyrin",
+            "Novak Djokovic"
+        ]
+    ],
+    "womens": [
+        [
+            "Iga Swiatek",
+            "Yulia Putintseva"
+        ],
+        [
+            "Bernarda Pera",
+            "Jelena Ostapenko"
+        ],
+        [
+            "Danielle Collins",
+            "Beatriz Haddad Maia"
+        ],
+        [
+            "Barbora Krejcikova",
+            "Jessica Bouzas Maneiro"
+        ],
+        [
+            "Elena Rybakina",
+            "Caroline Wozniacki"
+        ],
+        [
+            "Anna Kalinskaya",
+            "Liudmila Samsonova"
+        ],
+        [
+            "Ons Jabeur",
+            "Elina Svitolina"
+        ],
+        [
+            "Harriet Dart",
+            "Xin Wang"
+        ],
+        [
+            "Lulu Sun",
+            "Zhun Lin"
+        ],
+        [
+            "Emma Raducanu",
+            "Maria Sakkari"
+        ],
+        [
+            "Daria Kasatkina",
+            "Paula Badosa"
+        ],
+        [
+            "Dayana Yastremska",
+            "Dona Vekic"
+        ],
+        [
+            "Jasmine Paolini",
+            "Bianca Andreescu"
+        ],
+        [
+            "Marta Kostyuk",
+            "Madison Keys"
+        ],
+        [
+            "Diana Shnaider",
+            "Emma Navarro"
+        ],
+        [
+            "Sonay Kartal",
+            "Coco Gauff"
+        ]
+    ]
+};
+
+        const rounds = [
+            { name: "Round of 32", key: "r32" }, { name: "Round of 16", key: "r16" },
+            { name: "Quarterfinals", key: "qf" }, { name: "Semifinals", key: "sf" },
+            { name: "Final", key: "f" }
+        ];
+
+        function createBracket(containerId, initialData, category) {
+            const bracketContainer = document.getElementById(containerId);
+            rounds.forEach((round, roundIndex) => {
+                const roundDiv = document.createElement('div');
+                roundDiv.classList.add('round');
+                roundDiv.id = `${category}-${round.key}`;
+                const roundTitle = document.createElement('div');
+                roundTitle.classList.add('round-title');
+                roundTitle.textContent = round.name;
+                roundDiv.appendChild(roundTitle);
+
+                const numMatches = initialData.length / Math.pow(2, roundIndex);
+                for (let i = 0; i < numMatches; i++) {
+                    const matchupDiv = document.createElement('div');
+                    matchupDiv.classList.add('matchup');
+                    matchupDiv.id = `${category}-${round.key}-match-${i}`;
+                    if (roundIndex === 0) {
+                        const [player1, player2] = initialData[i];
+                        matchupDiv.innerHTML = `
+                            <label class="player"><input type="radio" name="${matchupDiv.id}" value="${player1}"> <span class="player-name">${player1}</span></label>
+                            <label class="player"><input type="radio" name="${matchupDiv.id}" value="${player2}"> <span class="player-name">${player2}</span></label>
+                        `;
+                    } else {
+                        matchupDiv.innerHTML = `
+                            <label class="player"><input type="radio" name="${matchupDiv.id}" value=""> <span class="player-name tbd">To Be Decided</span></label>
+                            <label class="player"><input type="radio" name="${matchupDiv.id}" value=""> <span class="player-name tbd">To Be Decided</span></label>
+                        `;
+                    }
+                    roundDiv.appendChild(matchupDiv);
+                }
+                bracketContainer.appendChild(roundDiv);
+            });
+            addEventListeners(category);
+        }
+
+        function addEventListeners(category) {
+            document.getElementById(`${category}-bracket`).addEventListener('change', (event) => {
+                if (event.target.type === 'radio') {
+                    const selectedWinner = event.target.value;
+                    const [cat, roundKey, _, matchIndexStr] = event.target.name.split('-');
+                    const matchIndex = parseInt(matchIndexStr, 10);
+                    document.getElementById(event.target.name).querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
+                    event.target.nextElementSibling.classList.add('winner');
+                    updateNextRound(category, roundKey, matchIndex, selectedWinner);
+                }
+            });
+        }
+
+        function updateNextRound(category, roundKey, matchIndex, winner) {
+            const currentRoundIndex = rounds.findIndex(r => r.key === roundKey);
+            if (currentRoundIndex >= rounds.length - 1) return;
+            const nextRound = rounds[currentRoundIndex + 1];
+            const nextMatchIndex = Math.floor(matchIndex / 2);
+            const playerSlot = matchIndex % 2;
+            const nextMatchupId = `${category}-${nextRound.key}-match-${nextMatchIndex}`;
+            const nextMatchupDiv = document.getElementById(nextMatchupId);
+            if (nextMatchupDiv) {
+                const playerLabel = nextMatchupDiv.querySelectorAll('.player')[playerSlot];
+                const playerInput = playerLabel.querySelector('input');
+                if (nextMatchupDiv.querySelector('input:checked')?.value === playerInput.value) {
+                    updateNextRound(category, nextRound.key, nextMatchIndex, 'To Be Decided');
+                }
+                playerInput.value = winner;
+                playerLabel.querySelector('.player-name').textContent = winner;
+                playerLabel.querySelector('.player-name').classList.toggle('tbd', winner === 'To Be Decided');
+                nextMatchupDiv.querySelectorAll('input').forEach(i => i.checked = false);
+                nextMatchupDiv.querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
+            }
+        }
+
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Category,Round,MatchID,PredictedWinner\n";
+            let allPicksMade = true;
+            document.querySelectorAll('.matchup').forEach(matchup => {
+                const checkedRadio = matchup.querySelector('input:checked');
+                if (!checkedRadio) { allPicksMade = false; }
+                const [category, roundKey] = matchup.id.split('-');
+                csvContent += `${category},${roundKey},${matchup.id},${checkedRadio ? checkedRadio.value : "NONE"}\n`;
+            });
+            if (!allPicksMade) { alert("Please complete the entire bracket before exporting!"); return; }
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "my_bracket_predictions.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        createBracket('mens-bracket', initialMatchups.mens, 'mens');
+        createBracket('womens-bracket', initialMatchups.womens, 'womens');
+    </script>
+</body>
+</html>
