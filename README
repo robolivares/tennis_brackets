@@ -1,0 +1,10 @@
+Steps to run the code
+
+0) Assumes this is a tournament that starts from round of 32
+1) Update entrants.txt
+2) Run 
+`python3 setup_bracket.py`
+3) Send bracket.html to friends
+4) Update actual_results.csv 
+5) Evaluate with
+`python wimbledon_scorer_final.py`
