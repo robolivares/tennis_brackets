@@ -10,12 +10,59 @@
             background-color: #f0f4f7; color: #333;
         }
         h1, h2 { text-align: center; color: #005A31; }
-        h1 { font-size: 2.5em; margin-bottom: 0.5em; }
+        h1 { font-size: 2.5em; margin-bottom: 0.25em; }
         h2 { font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }
-        .bracket-container { display: flex; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
-        .round { display: flex; flex-direction: column; justify-content: space-around; margin: 0 10px; flex-shrink: 0; }
-        .round-title { font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 20px; color: #4A0072; min-width: 250px; }
-        .matchup { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 30px; width: 250px; position: relative; }
+
+        /* Style for the new instructions */
+        .instructions {
+            max-width: 600px;
+            margin: 0 auto 2em auto;
+            padding: 1em;
+            background-color: #e6f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            text-align: left;
+        }
+        .instructions ol { padding-left: 25px; margin: 0; }
+
+        .bracket-container {
+            display: flex;
+            align-items: stretch;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding: 20px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .round {
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            margin: 0 10px;
+        }
+        .round-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #4A0072;
+            min-width: 250px;
+        }
+
+        .matchup-wrapper {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            flex-grow: 1;
+        }
+
+        .matchup {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: 250px;
+            position: relative;
+        }
         .player { display: block; margin: 5px 0; cursor: pointer; }
         .player-name { display: inline-block; min-width: 150px; font-size: 1em; color: #555; pointer-events: none; }
         .player-name.winner { font-weight: bold; color: #005A31; }
@@ -26,10 +73,21 @@
 </head>
 <body>
     <h1>Tournament Bracket Challenge</h1>
-    <h2>Men's Singles</h2>
+
+    <!-- NEW: Instructions -->
+    <div class="instructions">
+      <ol>
+        <li>Fill in your bracket by clicking the name of your predicted winner for each match.</li>
+        <li>Once finished, click the export button and enter your name to save the file.</li>
+      </ol>
+    </div>
+
+    <!-- UPDATED: Titles -->
+    <h2>Men's Singles Draw</h2>
     <div id="mens-bracket" class="bracket-container"></div>
-    <h2>Women's Singles</h2>
+    <h2>Women's Singles Draw</h2>
     <div id="womens-bracket" class="bracket-container"></div>
+
     <button id="export-btn" onclick="exportToCSV()">Lock In & Export My Bracket!</button>
 
     <script>
@@ -184,7 +242,8 @@
                 roundTitle.classList.add('round-title');
                 roundTitle.textContent = round.name;
                 roundDiv.appendChild(roundTitle);
-
+                const matchupWrapper = document.createElement('div');
+                matchupWrapper.classList.add('matchup-wrapper');
                 const numMatches = initialData.length / Math.pow(2, roundIndex);
                 for (let i = 0; i < numMatches; i++) {
                     const matchupDiv = document.createElement('div');
@@ -202,8 +261,9 @@
                             <label class="player"><input type="radio" name="${matchupDiv.id}" value=""> <span class="player-name tbd">To Be Decided</span></label>
                         `;
                     }
-                    roundDiv.appendChild(matchupDiv);
+                    matchupWrapper.appendChild(matchupDiv);
                 }
+                roundDiv.appendChild(matchupWrapper);
                 bracketContainer.appendChild(roundDiv);
             });
             addEventListeners(category);
@@ -254,9 +314,17 @@
                 csvContent += `${category},${roundKey},${matchup.id},${checkedRadio ? checkedRadio.value : "NONE"}\n`;
             });
             if (!allPicksMade) { alert("Please complete the entire bracket before exporting!"); return; }
+
+            // NEW: Prompt for name and create dynamic filename
+            const name = prompt("Please enter your name for the filename:", "your_name");
+            if (name === null || name === "") { // Handle cancel or empty name
+                return;
+            }
+            const filename = name.replace(/[^a-z0-9]/gi, '_').toLowerCase() + "_predictions.csv";
+
             const link = document.createElement("a");
             link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", "my_bracket_predictions.csv");
+            link.setAttribute("download", filename);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
