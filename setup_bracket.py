@@ -105,7 +105,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         .champion-trophy {{ font-size: 4em; color: #d4af37; line-height: 1; }}
         .champion-name {{ font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-height: 30px; text-align: center; }}
 
-        .action-button {{ display: block; width: 300px; margin: 2em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }}
+        .action-button {{ display: block; width: 300px; margin: 1em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }}
         .action-button:hover {{ background-color: #005A31; transform: scale(1.05); }}
 
         #interactive-view {{ display: block; }}
@@ -237,7 +237,8 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         function lockInBracket() {{
             let allPicksMade = true;
-            document.querySelectorAll('.matchup').forEach(matchup => {{
+            // FIXED: Selector now specifically targets the interactive view
+            document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {{
                 if (!matchup.querySelector('input:checked')) {{ allPicksMade = false; }}
             }});
             if (!allPicksMade) {{ alert("Please complete the entire bracket before exporting!"); return; }}
@@ -264,20 +265,38 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                 bracket.querySelectorAll('input[type="radio"]').forEach(radio => radio.remove());
             }});
 
-            // Inject the new static content and the download button
+            // Inject the new static content and the action buttons
             const staticViewContainer = document.getElementById('static-view');
             staticViewContainer.innerHTML = ''; // Clear previous content if any
             staticViewContainer.appendChild(staticViewContent);
+
+            // Create a container for the action buttons
+            const buttonContainer = document.createElement('div');
 
             const downloadButton = document.createElement('button');
             downloadButton.className = 'action-button';
             downloadButton.textContent = 'Download Prediction File (.csv)';
             downloadButton.onclick = downloadCSV;
-            staticViewContainer.appendChild(downloadButton);
+            buttonContainer.appendChild(downloadButton);
+
+            const editButton = document.createElement('button');
+            editButton.className = 'action-button';
+            editButton.textContent = 'Edit My Bracket';
+            editButton.style.backgroundColor = '#6c757d'; // A different color for a secondary action
+            editButton.onclick = goBackToEdit;
+            buttonContainer.appendChild(editButton);
+
+            staticViewContainer.appendChild(buttonContainer);
 
             // Switch views
             document.getElementById('interactive-view').style.display = 'none';
             document.getElementById('static-view').style.display = 'block';
+            window.scrollTo(0, 0); // Scroll to top
+        }}
+
+        function goBackToEdit() {{
+            document.getElementById('static-view').style.display = 'none';
+            document.getElementById('interactive-view').style.display = 'block';
         }}
 
         function downloadCSV() {{
