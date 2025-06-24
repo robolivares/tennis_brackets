@@ -38,13 +38,14 @@ def parse_entrants(filepath="entrants.txt"):
 
 def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
     """
-    Generates the full interactive HTML bracket file from matchup data.
+    Generates the full interactive HTML bracket file with improved alignment.
     """
     js_matchups = {
         "mens": mens_matchups,
         "womens": womens_matchups
     }
 
+    # The HTML template now contains updated CSS for better alignment.
     html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,10 +60,48 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         h1, h2 {{ text-align: center; color: #005A31; }}
         h1 {{ font-size: 2.5em; margin-bottom: 0.5em; }}
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
-        .bracket-container {{ display: flex; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }}
-        .round {{ display: flex; flex-direction: column; justify-content: space-around; margin: 0 10px; flex-shrink: 0; }}
-        .round-title {{ font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 20px; color: #4A0072; min-width: 250px; }}
-        .matchup {{ background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 30px; width: 250px; position: relative; }}
+
+        .bracket-container {{
+            display: flex;
+            /* UPDATED: 'stretch' makes all round columns equal height, which is key for alignment. */
+            align-items: stretch;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding: 20px;
+            -webkit-overflow-scrolling: touch;
+        }}
+        .round {{
+            display: flex;
+            flex-direction: column; /* Lays out title and wrapper vertically */
+            flex-shrink: 0;
+            margin: 0 10px;
+        }}
+        .round-title {{
+            font-size: 1.2em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px; /* Increased space below title */
+            color: #4A0072;
+            min-width: 250px;
+        }}
+
+        /* Wrapper for matchups to handle alignment */
+        .matchup-wrapper {{
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around; /* This is key for vertical centering */
+            flex-grow: 1; /* Allows the wrapper to fill available space */
+        }}
+
+        .matchup {{
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            /* margin-bottom is handled by space-around now */
+            width: 250px;
+            position: relative;
+        }}
         .player {{ display: block; margin: 5px 0; cursor: pointer; }}
         .player-name {{ display: inline-block; min-width: 150px; font-size: 1em; color: #555; pointer-events: none; }}
         .player-name.winner {{ font-weight: bold; color: #005A31; }}
@@ -91,13 +130,20 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         function createBracket(containerId, initialData, category) {{
             const bracketContainer = document.getElementById(containerId);
             rounds.forEach((round, roundIndex) => {{
+                // Create the .round container
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
                 roundDiv.id = `${{category}}-${{round.key}}`;
+
+                // Add the title
                 const roundTitle = document.createElement('div');
                 roundTitle.classList.add('round-title');
                 roundTitle.textContent = round.name;
                 roundDiv.appendChild(roundTitle);
+
+                // Create the wrapper for matchups
+                const matchupWrapper = document.createElement('div');
+                matchupWrapper.classList.add('matchup-wrapper');
 
                 const numMatches = initialData.length / Math.pow(2, roundIndex);
                 for (let i = 0; i < numMatches; i++) {{
@@ -116,8 +162,9 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                             <label class="player"><input type="radio" name="${{matchupDiv.id}}" value=""> <span class="player-name tbd">To Be Decided</span></label>
                         `;
                     }}
-                    roundDiv.appendChild(matchupDiv);
+                    matchupWrapper.appendChild(matchupDiv); // Append matchup to the wrapper
                 }}
+                roundDiv.appendChild(matchupWrapper); // Append wrapper to the round container
                 bracketContainer.appendChild(roundDiv);
             }});
             addEventListeners(category);
@@ -188,7 +235,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
 def generate_results_template(output_path="actual_results.csv"):
     """
-    UPDATED: Creates a blank CSV template for entering the actual results
+    Creates a blank CSV template for entering the actual results
     with the simplified 3-column format.
     """
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
@@ -212,4 +259,5 @@ if __name__ == "__main__":
         generate_html(mens_data, womens_data)
         generate_results_template()
         print("\nSetup complete! You can now send 'bracket.html' to your friends.")
+
 
