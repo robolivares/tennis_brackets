@@ -1,11 +1,12 @@
 import json
 import os
 import csv
+import re
 
 def parse_entrants(filepath="entrants.txt"):
     """
-    Parses the entrants.txt file to get the initial matchups.
-    Expects a format with 'mens' and 'womens' headers.
+    Parses the entrants.txt file to get initial matchups, including seeding.
+    New format: (1) Player Name vs (16) Other Player
     """
     if not os.path.exists(filepath):
         return None, None
@@ -13,12 +14,24 @@ def parse_entrants(filepath="entrants.txt"):
     mens_matchups = []
     womens_matchups = []
     current_category = None
+    # Regex to capture seed (in parentheses) and player name
+    player_regex = re.compile(r"\((.*?)\)\s*(.*)|(^[^\(]+)")
+
+    def parse_player(p_str):
+        match = player_regex.match(p_str.strip())
+        if match:
+            # Handles format (seed) Player Name
+            if match.group(1) is not None:
+                return (match.group(1), match.group(2).strip())
+            # Handles format Player Name (no seed)
+            elif match.group(3) is not None:
+                return ("", match.group(3).strip())
+        return ("", p_str) # Fallback
 
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
-            if not line:
-                continue
+            if not line: continue
             if line.lower() == 'mens':
                 current_category = 'mens'
                 continue
@@ -27,118 +40,105 @@ def parse_entrants(filepath="entrants.txt"):
                 continue
 
             if 'vs' in line and current_category:
-                players = [p.strip() for p in line.split('vs')]
-                if len(players) == 2:
-                    if current_category == 'mens':
-                        mens_matchups.append(players)
-                    elif current_category == 'womens':
-                        womens_matchups.append(players)
+                p1_str, p2_str = [p.strip() for p in line.split('vs')]
+                player1 = parse_player(p1_str)
+                player2 = parse_player(p2_str)
+
+                if current_category == 'mens':
+                    mens_matchups.append([player1, player2])
+                elif current_category == 'womens':
+                    womens_matchups.append([player1, player2])
 
     return mens_matchups, womens_matchups
 
 def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
     """
-    Generates the full interactive HTML bracket file with improved alignment and instructions.
+    Generates the full interactive HTML bracket file with an improved export flow.
     """
-    js_matchups = {
-        "mens": mens_matchups,
-        "womens": womens_matchups
-    }
+    js_matchups = {"mens": mens_matchups, "womens": womens_matchups}
 
-    # The HTML template now contains the new instructions and title changes.
     html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tournament Bracket Challenge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 2em;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 2em;
             background-color: #f0f4f7; color: #333;
         }}
         h1, h2 {{ text-align: center; color: #005A31; }}
         h1 {{ font-size: 2.5em; margin-bottom: 0.25em; }}
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
-
-        /* Style for the new instructions */
-        .instructions {{
-            max-width: 600px;
-            margin: 0 auto 2em auto;
-            padding: 1em;
-            background-color: #e6f3ff;
-            border: 1px solid #b3d9ff;
-            border-radius: 8px;
-            text-align: left;
-        }}
+        .instructions {{ max-width: 600px; margin: 0 auto 2em auto; padding: 1em; background-color: #e6f3ff; border: 1px solid #b3d9ff; border-radius: 8px; text-align: left; }}
         .instructions ol {{ padding-left: 25px; margin: 0; }}
 
-        .bracket-container {{
-            display: flex;
-            align-items: stretch;
-            justify-content: flex-start;
-            overflow-x: auto;
-            padding: 20px;
-            -webkit-overflow-scrolling: touch;
-        }}
-        .round {{
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            margin: 0 10px;
-        }}
-        .round-title {{
-            font-size: 1.2em;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 30px;
-            color: #4A0072;
-            min-width: 250px;
-        }}
-
-        .matchup-wrapper {{
-            display: flex;
-            flex-direction: column;
-            justify-content: space-around;
-            flex-grow: 1;
-        }}
+        .bracket-container {{ display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }}
+        .round {{ display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }}
+        .round-title {{ font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; }}
+        .matchup-wrapper {{ display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; }}
 
         .matchup {{
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            width: 250px;
-            position: relative;
+            background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: 270px; position: relative;
         }}
-        .player {{ display: block; margin: 5px 0; cursor: pointer; }}
-        .player-name {{ display: inline-block; min-width: 150px; font-size: 1em; color: #555; pointer-events: none; }}
+        .matchup-wrapper > .matchup:not(:last-child) {{ margin-bottom: 28px; }}
+
+        .player {{ display: flex; align-items: center; margin: 8px 0; border-radius: 5px; transition: background-color 0.2s; }}
+        .interactive .player {{ cursor: pointer; }}
+        .interactive .player:hover {{ background-color: #f0f8ff; }}
+
+        .player-seed {{ font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }}
+        .player-name {{ flex-grow: 1; font-size: 1em; color: #333; }}
+        .static .player-name {{ pointer-events: none; }} /* Prevent text selection on static view */
+
         .player-name.winner {{ font-weight: bold; color: #005A31; }}
         .tbd {{ font-style: italic; color: #999; }}
-        button#export-btn {{ display: block; width: 300px; margin: 2em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }}
-        button#export-btn:hover {{ background-color: #005A31; transform: scale(1.05); }}
+
+        .champion-container {{ display: flex; align-items: center; justify-content: center; }}
+        .champion-box {{ display: flex; flex-direction: column; align-items: center; justify-content: center; }}
+        .champion-trophy {{ font-size: 4em; color: #d4af37; line-height: 1; }}
+        .champion-name {{ font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-height: 30px; text-align: center; }}
+
+        .action-button {{ display: block; width: 300px; margin: 2em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }}
+        .action-button:hover {{ background-color: #005A31; transform: scale(1.05); }}
+
+        #interactive-view {{ display: block; }}
+        #static-view {{ display: none; }}
     </style>
 </head>
 <body>
-    <h1>Tournament Bracket Challenge</h1>
+    <div id="interactive-view">
+        <h1>Tournament Bracket Challenge</h1>
+        <div class="instructions">
+          <ol>
+            <li>Fill in your bracket by clicking your predicted winner for each match.</li>
+            <li>Once finished, click the "Lock In Bracket" button to see a summary and get your prediction file.</li>
+          </ol>
+        </div>
 
-    <!-- NEW: Instructions -->
-    <div class="instructions">
-      <ol>
-        <li>Fill in your bracket by clicking the name of your predicted winner for each match.</li>
-        <li>Once finished, click the export button and enter your name to save the file.</li>
-      </ol>
+        <h2>Men's Singles Draw</h2>
+        <div id="mens-bracket" class="bracket-container"></div>
+        <h2>Women's Singles Draw</h2>
+        <div id="womens-bracket" class="bracket-container"></div>
+
+        <button id="lock-in-btn" class="action-button" onclick="lockInBracket()">Lock In Bracket</button>
     </div>
 
-    <!-- UPDATED: Titles -->
-    <h2>Men's Singles Draw</h2>
-    <div id="mens-bracket" class="bracket-container"></div>
-    <h2>Women's Singles Draw</h2>
-    <div id="womens-bracket" class="bracket-container"></div>
+    <div id="static-view">
+        <!-- Static content will be generated here -->
+    </div>
 
-    <button id="export-btn" onclick="exportToCSV()">Lock In & Export My Bracket!</button>
 
     <script>
+        // Global variable to hold user's name
+        let participantName = '';
+
         const initialMatchups = {json.dumps(js_matchups, indent=4)};
 
         const rounds = [
@@ -149,10 +149,10 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         function createBracket(containerId, initialData, category) {{
             const bracketContainer = document.getElementById(containerId);
+            bracketContainer.classList.add('interactive'); // Mark as interactive
             rounds.forEach((round, roundIndex) => {{
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
-                roundDiv.id = `${{category}}-${{round.key}}`;
                 const roundTitle = document.createElement('div');
                 roundTitle.classList.add('round-title');
                 roundTitle.textContent = round.name;
@@ -165,15 +165,15 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                     matchupDiv.classList.add('matchup');
                     matchupDiv.id = `${{category}}-${{round.key}}-match-${{i}}`;
                     if (roundIndex === 0) {{
-                        const [player1, player2] = initialData[i];
+                        const [p1, p2] = initialData[i];
                         matchupDiv.innerHTML = `
-                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value="${{player1}}"> <span class="player-name">${{player1}}</span></label>
-                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value="${{player2}}"> <span class="player-name">${{player2}}</span></label>
+                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value="${{p1[1]}}"><span class="player-seed">${{p1[0]}}</span><span class="player-name">${{p1[1]}}</span></label>
+                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value="${{p2[1]}}"><span class="player-seed">${{p2[0]}}</span><span class="player-name">${{p2[1]}}</span></label>
                         `;
                     }} else {{
                         matchupDiv.innerHTML = `
-                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value=""> <span class="player-name tbd">To Be Decided</span></label>
-                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value=""> <span class="player-name tbd">To Be Decided</span></label>
+                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value=""><span class="player-seed"></span><span class="player-name tbd">To Be Decided</span></label>
+                            <label class="player"><input type="radio" name="${{matchupDiv.id}}" value=""><span class="player-seed"></span><span class="player-name tbd">To Be Decided</span></label>
                         `;
                     }}
                     matchupWrapper.appendChild(matchupDiv);
@@ -181,18 +181,30 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                 roundDiv.appendChild(matchupWrapper);
                 bracketContainer.appendChild(roundDiv);
             }});
+
+            const championContainer = document.createElement('div');
+            championContainer.classList.add('champion-container');
+            championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div id="${{category}}-champion-name" class="champion-name"></div></div>`;
+            bracketContainer.appendChild(championContainer);
+
             addEventListeners(category);
         }}
 
         function addEventListeners(category) {{
             document.getElementById(`${{category}}-bracket`).addEventListener('change', (event) => {{
                 if (event.target.type === 'radio') {{
-                    const selectedWinner = event.target.value;
-                    const [cat, roundKey, _, matchIndexStr] = event.target.name.split('-');
-                    const matchIndex = parseInt(matchIndexStr, 10);
+                    const selectedName = event.target.value;
+                    const selectedLabel = event.target.closest('.player');
+                    const selectedSeed = selectedLabel.querySelector('.player-seed').textContent;
+                    const nameParts = event.target.name.split('-');
+                    const roundKey = nameParts[1];
+                    const matchIndex = parseInt(nameParts[3], 10);
                     document.getElementById(event.target.name).querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
-                    event.target.nextElementSibling.classList.add('winner');
-                    updateNextRound(category, roundKey, matchIndex, selectedWinner);
+                    selectedLabel.querySelector('.player-name').classList.add('winner');
+                    updateNextRound(category, roundKey, matchIndex, {{seed: selectedSeed, name: selectedName}});
+                    if(roundKey === 'f'){{
+                        document.getElementById(`${{category}}-champion-name`).textContent = selectedName;
+                    }}
                 }}
             }});
         }}
@@ -208,43 +220,88 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
             if (nextMatchupDiv) {{
                 const playerLabel = nextMatchupDiv.querySelectorAll('.player')[playerSlot];
                 const playerInput = playerLabel.querySelector('input');
+                const playerNameSpan = playerLabel.querySelector('.player-name');
+                const playerSeedSpan = playerLabel.querySelector('.player-seed');
                 if (nextMatchupDiv.querySelector('input:checked')?.value === playerInput.value) {{
-                    updateNextRound(category, nextRound.key, nextMatchIndex, 'To Be Decided');
+                    updateNextRound(category, nextRound.key, nextMatchIndex, {{seed:'', name:'To Be Decided'}});
+                     if(nextRound.key === 'f'){{ document.getElementById(`${{category}}-champion-name`).textContent = ''; }}
                 }}
-                playerInput.value = winner;
-                playerLabel.querySelector('.player-name').textContent = winner;
-                playerLabel.querySelector('.player-name').classList.toggle('tbd', winner === 'To Be Decided');
+                playerInput.value = winner.name;
+                playerNameSpan.textContent = winner.name;
+                playerSeedSpan.textContent = winner.seed;
+                playerNameSpan.classList.toggle('tbd', winner.name === 'To Be Decided');
                 nextMatchupDiv.querySelectorAll('input').forEach(i => i.checked = false);
                 nextMatchupDiv.querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
             }}
         }}
 
-        function exportToCSV() {{
-            let csvContent = "data:text/csv;charset=utf-8,Category,Round,MatchID,PredictedWinner\\n";
+        function lockInBracket() {{
             let allPicksMade = true;
             document.querySelectorAll('.matchup').forEach(matchup => {{
-                const checkedRadio = matchup.querySelector('input:checked');
-                if (!checkedRadio) {{ allPicksMade = false; }}
-                const [category, roundKey] = matchup.id.split('-');
-                csvContent += `${{category}},${{roundKey}},${{matchup.id}},${{checkedRadio ? checkedRadio.value : "NONE"}}\\n`;
+                if (!matchup.querySelector('input:checked')) {{ allPicksMade = false; }}
             }});
             if (!allPicksMade) {{ alert("Please complete the entire bracket before exporting!"); return; }}
 
-            // NEW: Prompt for name and create dynamic filename
-            const name = prompt("Please enter your name for the filename:", "your_name");
-            if (name === null || name === "") {{ // Handle cancel or empty name
-                return;
-            }}
-            const filename = name.replace(/[^a-z0-9]/gi, '_').toLowerCase() + "_predictions.csv";
+            const name = prompt("Please enter your name:", "your_name");
+            if (name === null || name.trim() === "") return;
+            participantName = name; // Store name globally
+
+            // Clone the interactive view to create a static version
+            const interactiveView = document.getElementById('interactive-view');
+            const staticViewContent = interactiveView.cloneNode(true);
+
+            // Modify the clone for static display
+            staticViewContent.id = '';
+            staticViewContent.querySelector('h1').textContent += ` - ${{participantName}}'s Picks`;
+            staticViewContent.querySelector('.instructions').remove();
+            staticViewContent.querySelector('#lock-in-btn').remove();
+
+            // Make static bracket non-interactive
+            const staticBrackets = staticViewContent.querySelectorAll('.bracket-container');
+            staticBrackets.forEach(bracket => {{
+                bracket.classList.remove('interactive');
+                bracket.classList.add('static');
+                bracket.querySelectorAll('input[type="radio"]').forEach(radio => radio.remove());
+            }});
+
+            // Inject the new static content and the download button
+            const staticViewContainer = document.getElementById('static-view');
+            staticViewContainer.innerHTML = ''; // Clear previous content if any
+            staticViewContainer.appendChild(staticViewContent);
+
+            const downloadButton = document.createElement('button');
+            downloadButton.className = 'action-button';
+            downloadButton.textContent = 'Download Prediction File (.csv)';
+            downloadButton.onclick = downloadCSV;
+            staticViewContainer.appendChild(downloadButton);
+
+            // Switch views
+            document.getElementById('interactive-view').style.display = 'none';
+            document.getElementById('static-view').style.display = 'block';
+        }}
+
+        function downloadCSV() {{
+            let csvContent = "Category,Round,MatchID,PredictedWinner\\n";
+            document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {{
+                const checkedRadio = matchup.querySelector('input:checked');
+                const [category, roundKey] = matchup.id.split('-');
+                csvContent += `${{category}},${{roundKey}},${{matchup.id}},${{checkedRadio ? checkedRadio.value : "NONE"}}\\n`;
+            }});
+
+            const baseFilename = participantName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const filename = `${{baseFilename}}_predictions.csv`;
 
             const link = document.createElement("a");
-            link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", filename);
+            const file = new Blob([csvContent], {{ type: 'text/csv;charset=utf-8;' }});
+            link.href = URL.createObjectURL(file);
+            link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
         }}
 
+        // Initial setup
         createBracket('mens-bracket', initialMatchups.mens, 'mens');
         createBracket('womens-bracket', initialMatchups.womens, 'womens');
     </script>
@@ -256,9 +313,6 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
     print(f"Successfully generated HTML bracket at: {output_path}")
 
 def generate_results_template(output_path="actual_results.csv"):
-    """
-    Creates a blank CSV template for entering the actual results.
-    """
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['category', 'round', 'winner'])
@@ -271,13 +325,12 @@ if __name__ == "__main__":
 
     if not mens_data or not womens_data:
         print("\nError: Could not find 'entrants.txt' or the file is empty.")
-        print("Please create 'entrants.txt' in the same directory.")
     elif len(mens_data) != 16 or len(womens_data) != 16:
-        print(f"\nError: Incorrect number of matchups found.")
-        print(f"Expected 16 for each category, but found {len(mens_data)} for men and {len(womens_data)} for women.")
+        print(f"\nError: Incorrect number of matchups. Found {len(mens_data)} for men and {len(womens_data)} for women.")
     else:
-        print("\nFound 16 matchups for Men and 16 for Women. Generating files...")
+        print("\nFound valid matchups. Generating files...")
         generate_html(mens_data, womens_data)
         generate_results_template()
         print("\nSetup complete! You can now send 'bracket.html' to your friends.")
+
 
