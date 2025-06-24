@@ -38,14 +38,14 @@ def parse_entrants(filepath="entrants.txt"):
 
 def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
     """
-    Generates the full interactive HTML bracket file with improved alignment.
+    Generates the full interactive HTML bracket file with improved alignment and instructions.
     """
     js_matchups = {
         "mens": mens_matchups,
         "womens": womens_matchups
     }
 
-    # The HTML template now contains updated CSS for better alignment.
+    # The HTML template now contains the new instructions and title changes.
     html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,12 +58,23 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
             background-color: #f0f4f7; color: #333;
         }}
         h1, h2 {{ text-align: center; color: #005A31; }}
-        h1 {{ font-size: 2.5em; margin-bottom: 0.5em; }}
+        h1 {{ font-size: 2.5em; margin-bottom: 0.25em; }}
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
+
+        /* Style for the new instructions */
+        .instructions {{
+            max-width: 600px;
+            margin: 0 auto 2em auto;
+            padding: 1em;
+            background-color: #e6f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            text-align: left;
+        }}
+        .instructions ol {{ padding-left: 25px; margin: 0; }}
 
         .bracket-container {{
             display: flex;
-            /* UPDATED: 'stretch' makes all round columns equal height, which is key for alignment. */
             align-items: stretch;
             justify-content: flex-start;
             overflow-x: auto;
@@ -72,7 +83,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         }}
         .round {{
             display: flex;
-            flex-direction: column; /* Lays out title and wrapper vertically */
+            flex-direction: column;
             flex-shrink: 0;
             margin: 0 10px;
         }}
@@ -80,17 +91,16 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
             font-size: 1.2em;
             font-weight: bold;
             text-align: center;
-            margin-bottom: 30px; /* Increased space below title */
+            margin-bottom: 30px;
             color: #4A0072;
             min-width: 250px;
         }}
 
-        /* Wrapper for matchups to handle alignment */
         .matchup-wrapper {{
             display: flex;
             flex-direction: column;
-            justify-content: space-around; /* This is key for vertical centering */
-            flex-grow: 1; /* Allows the wrapper to fill available space */
+            justify-content: space-around;
+            flex-grow: 1;
         }}
 
         .matchup {{
@@ -98,7 +108,6 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            /* margin-bottom is handled by space-around now */
             width: 250px;
             position: relative;
         }}
@@ -112,10 +121,21 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 </head>
 <body>
     <h1>Tournament Bracket Challenge</h1>
-    <h2>Men's Singles</h2>
+
+    <!-- NEW: Instructions -->
+    <div class="instructions">
+      <ol>
+        <li>Fill in your bracket by clicking the name of your predicted winner for each match.</li>
+        <li>Once finished, click the export button and enter your name to save the file.</li>
+      </ol>
+    </div>
+
+    <!-- UPDATED: Titles -->
+    <h2>Men's Singles Draw</h2>
     <div id="mens-bracket" class="bracket-container"></div>
-    <h2>Women's Singles</h2>
+    <h2>Women's Singles Draw</h2>
     <div id="womens-bracket" class="bracket-container"></div>
+
     <button id="export-btn" onclick="exportToCSV()">Lock In & Export My Bracket!</button>
 
     <script>
@@ -130,21 +150,15 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         function createBracket(containerId, initialData, category) {{
             const bracketContainer = document.getElementById(containerId);
             rounds.forEach((round, roundIndex) => {{
-                // Create the .round container
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
                 roundDiv.id = `${{category}}-${{round.key}}`;
-
-                // Add the title
                 const roundTitle = document.createElement('div');
                 roundTitle.classList.add('round-title');
                 roundTitle.textContent = round.name;
                 roundDiv.appendChild(roundTitle);
-
-                // Create the wrapper for matchups
                 const matchupWrapper = document.createElement('div');
                 matchupWrapper.classList.add('matchup-wrapper');
-
                 const numMatches = initialData.length / Math.pow(2, roundIndex);
                 for (let i = 0; i < numMatches; i++) {{
                     const matchupDiv = document.createElement('div');
@@ -162,9 +176,9 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                             <label class="player"><input type="radio" name="${{matchupDiv.id}}" value=""> <span class="player-name tbd">To Be Decided</span></label>
                         `;
                     }}
-                    matchupWrapper.appendChild(matchupDiv); // Append matchup to the wrapper
+                    matchupWrapper.appendChild(matchupDiv);
                 }}
-                roundDiv.appendChild(matchupWrapper); // Append wrapper to the round container
+                roundDiv.appendChild(matchupWrapper);
                 bracketContainer.appendChild(roundDiv);
             }});
             addEventListeners(category);
@@ -215,9 +229,17 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                 csvContent += `${{category}},${{roundKey}},${{matchup.id}},${{checkedRadio ? checkedRadio.value : "NONE"}}\\n`;
             }});
             if (!allPicksMade) {{ alert("Please complete the entire bracket before exporting!"); return; }}
+
+            // NEW: Prompt for name and create dynamic filename
+            const name = prompt("Please enter your name for the filename:", "your_name");
+            if (name === null || name === "") {{ // Handle cancel or empty name
+                return;
+            }}
+            const filename = name.replace(/[^a-z0-9]/gi, '_').toLowerCase() + "_predictions.csv";
+
             const link = document.createElement("a");
             link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", "my_bracket_predictions.csv");
+            link.setAttribute("download", filename);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -235,8 +257,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
 def generate_results_template(output_path="actual_results.csv"):
     """
-    Creates a blank CSV template for entering the actual results
-    with the simplified 3-column format.
+    Creates a blank CSV template for entering the actual results.
     """
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
@@ -259,5 +280,4 @@ if __name__ == "__main__":
         generate_html(mens_data, womens_data)
         generate_results_template()
         print("\nSetup complete! You can now send 'bracket.html' to your friends.")
-
 
