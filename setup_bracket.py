@@ -53,7 +53,7 @@ def parse_entrants(filepath="entrants.txt"):
 
 def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
     """
-    Generates the full interactive HTML bracket file with an improved export flow.
+    Generates the final, polished interactive HTML bracket file.
     """
     js_matchups = {"mens": mens_matchups, "womens": womens_matchups}
 
@@ -95,7 +95,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         .player-seed {{ font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }}
         .player-name {{ flex-grow: 1; font-size: 1em; color: #333; }}
-        .static .player-name {{ pointer-events: none; }} /* Prevent text selection on static view */
+        .static .player-name {{ pointer-events: none; }}
 
         .player-name.winner {{ font-weight: bold; color: #005A31; }}
         .tbd {{ font-style: italic; color: #999; }}
@@ -107,6 +107,10 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         .action-button {{ display: block; width: 300px; margin: 1em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }}
         .action-button:hover {{ background-color: #005A31; transform: scale(1.05); }}
+
+        /* NEW: Styles for side-by-side buttons */
+        .button-container {{ display: flex; justify-content: center; gap: 20px; margin: 2em auto; }}
+        .button-container .action-button {{ margin: 0; width: auto; padding: 0.8em 1.5em; font-size: 1em; }}
 
         #interactive-view {{ display: block; }}
         #static-view {{ display: none; }}
@@ -136,9 +140,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
 
     <script>
-        // Global variable to hold user's name
         let participantName = '';
-
         const initialMatchups = {json.dumps(js_matchups, indent=4)};
 
         const rounds = [
@@ -149,7 +151,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         function createBracket(containerId, initialData, category) {{
             const bracketContainer = document.getElementById(containerId);
-            bracketContainer.classList.add('interactive'); // Mark as interactive
+            bracketContainer.classList.add('interactive');
             rounds.forEach((round, roundIndex) => {{
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
@@ -237,27 +239,28 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         function lockInBracket() {{
             let allPicksMade = true;
-            // FIXED: Selector now specifically targets the interactive view
             document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {{
                 if (!matchup.querySelector('input:checked')) {{ allPicksMade = false; }}
             }});
             if (!allPicksMade) {{ alert("Please complete the entire bracket before exporting!"); return; }}
 
-            const name = prompt("Please enter your name:", "your_name");
-            if (name === null || name.trim() === "") return;
-            participantName = name; // Store name globally
+            // UPDATED: Only prompt for name if it's not already set
+            if (!participantName) {{
+                const name = prompt("Please enter your name:", "your_name");
+                if (name === null || name.trim() === "") return;
+                participantName = name;
+            }}
 
-            // Clone the interactive view to create a static version
             const interactiveView = document.getElementById('interactive-view');
             const staticViewContent = interactiveView.cloneNode(true);
 
-            // Modify the clone for static display
-            staticViewContent.id = '';
-            staticViewContent.querySelector('h1').textContent += ` - ${{participantName}}'s Picks`;
+            staticViewContent.id = 'static-view-content';
+            const staticH1 = staticViewContent.querySelector('h1');
+            staticH1.textContent = `Tournament Bracket - ${{participantName}}'s Picks`;
+
             staticViewContent.querySelector('.instructions').remove();
             staticViewContent.querySelector('#lock-in-btn').remove();
 
-            // Make static bracket non-interactive
             const staticBrackets = staticViewContent.querySelectorAll('.bracket-container');
             staticBrackets.forEach(bracket => {{
                 bracket.classList.remove('interactive');
@@ -265,14 +268,12 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                 bracket.querySelectorAll('input[type="radio"]').forEach(radio => radio.remove());
             }});
 
-            // Inject the new static content and the action buttons
             const staticViewContainer = document.getElementById('static-view');
-            staticViewContainer.innerHTML = ''; // Clear previous content if any
-            staticViewContainer.appendChild(staticViewContent);
+            staticViewContainer.innerHTML = '';
 
-            // Create a container for the action buttons
+            // NEW: Create and insert the button container right after the title
             const buttonContainer = document.createElement('div');
-
+            buttonContainer.className = 'button-container';
             const downloadButton = document.createElement('button');
             downloadButton.className = 'action-button';
             downloadButton.textContent = 'Download Prediction File (.csv)';
@@ -282,16 +283,22 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
             const editButton = document.createElement('button');
             editButton.className = 'action-button';
             editButton.textContent = 'Edit My Bracket';
-            editButton.style.backgroundColor = '#6c757d'; // A different color for a secondary action
+            editButton.style.backgroundColor = '#6c757d';
             editButton.onclick = goBackToEdit;
             buttonContainer.appendChild(editButton);
 
+            // Insert title and buttons first
+            staticViewContainer.appendChild(staticH1);
             staticViewContainer.appendChild(buttonContainer);
 
-            // Switch views
+            // Now append the rest of the content (the brackets)
+            staticViewContent.querySelectorAll('.bracket-container, h2').forEach(el => {{
+                 staticViewContainer.appendChild(el);
+            }});
+
             document.getElementById('interactive-view').style.display = 'none';
             document.getElementById('static-view').style.display = 'block';
-            window.scrollTo(0, 0); // Scroll to top
+            window.scrollTo(0, 0);
         }}
 
         function goBackToEdit() {{
