@@ -49,21 +49,28 @@
         .action-button { display: block; width: 300px; margin: 1em auto; padding: 1em; font-size: 1.2em; font-weight: bold; color: #fff; background-color: #4A0072; border: none; border-radius: 8px; cursor: pointer; transition: background-color 0.3s, transform 0.2s; }
         .action-button:hover { background-color: #005A31; transform: scale(1.05); }
 
-        /* NEW: Styles for side-by-side buttons */
         .button-container { display: flex; justify-content: center; gap: 20px; margin: 2em auto; }
         .button-container .action-button { margin: 0; width: auto; padding: 0.8em 1.5em; font-size: 1em; }
 
         #interactive-view { display: block; }
         #static-view { display: none; }
+
+        #dev-controls { display: none; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 2em; padding: 1em; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; }
+        .dev-button { background-color: #c82333; font-size: 0.9em; padding: 0.5em 1em; width: auto; margin: 0; }
     </style>
 </head>
 <body>
     <div id="interactive-view">
         <h1>Tournament Bracket Challenge</h1>
+
+        <div id="dev-controls">
+            <!-- Dev buttons will be injected here -->
+        </div>
+
         <div class="instructions">
           <ol>
             <li>Fill in your bracket by clicking your predicted winner for each match.</li>
-            <li>Once finished, click the "Lock In Bracket" button to see a summary and get your prediction file.</li>
+            <li>Once finished, click the "Lock In & Review" button to see a summary of your picks.</li>
           </ol>
         </div>
 
@@ -72,7 +79,7 @@
         <h2>Women's Singles Draw</h2>
         <div id="womens-bracket" class="bracket-container"></div>
 
-        <button id="lock-in-btn" class="action-button" onclick="lockInBracket()">Lock In Bracket</button>
+        <button id="lock-in-btn" class="action-button" onclick="lockInBracket()">Lock In & Review Bracket</button>
     </div>
 
     <div id="static-view">
@@ -408,6 +415,7 @@
         ]
     ]
 };
+        const googleFormConfig = {"action_url": "https://docs.google.com/forms/d/e/1FAIpQLScZYp9PTDpzzOUJD7tXRG8hzMy3Lah_h1bERTQozYz65eD-4g/formResponse", "name_entry": "entry.2093168041", "data_entry": "entry.1061406125"};
 
         const rounds = [
             { name: "Round of 32", key: "r32" }, { name: "Round of 16", key: "r16" },
@@ -421,6 +429,7 @@
             rounds.forEach((round, roundIndex) => {
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
+                roundDiv.id = `${category}-${round.key}`;
                 const roundTitle = document.createElement('div');
                 roundTitle.classList.add('round-title');
                 roundTitle.textContent = round.name;
@@ -508,9 +517,8 @@
             document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {
                 if (!matchup.querySelector('input:checked')) { allPicksMade = false; }
             });
-            if (!allPicksMade) { alert("Please complete the entire bracket before exporting!"); return; }
+            if (!allPicksMade) { alert("Please complete the entire bracket before continuing!"); return; }
 
-            // UPDATED: Only prompt for name if it's not already set
             if (!participantName) {
                 const name = prompt("Please enter your name:", "your_name");
                 if (name === null || name.trim() === "") return;
@@ -527,6 +535,11 @@
             staticViewContent.querySelector('.instructions').remove();
             staticViewContent.querySelector('#lock-in-btn').remove();
 
+            const devControlsInClone = staticViewContent.querySelector('#dev-controls');
+            if (devControlsInClone) {
+                devControlsInClone.remove();
+            }
+
             const staticBrackets = staticViewContent.querySelectorAll('.bracket-container');
             staticBrackets.forEach(bracket => {
                 bracket.classList.remove('interactive');
@@ -537,14 +550,13 @@
             const staticViewContainer = document.getElementById('static-view');
             staticViewContainer.innerHTML = '';
 
-            // NEW: Create and insert the button container right after the title
             const buttonContainer = document.createElement('div');
             buttonContainer.className = 'button-container';
-            const downloadButton = document.createElement('button');
-            downloadButton.className = 'action-button';
-            downloadButton.textContent = 'Download Prediction File (.csv)';
-            downloadButton.onclick = downloadCSV;
-            buttonContainer.appendChild(downloadButton);
+            const submitButton = document.createElement('button');
+            submitButton.className = 'action-button';
+            submitButton.textContent = 'Submit My Bracket';
+            submitButton.onclick = submitToGoogleForm;
+            buttonContainer.appendChild(submitButton);
 
             const editButton = document.createElement('button');
             editButton.className = 'action-button';
@@ -553,11 +565,9 @@
             editButton.onclick = goBackToEdit;
             buttonContainer.appendChild(editButton);
 
-            // Insert title and buttons first
             staticViewContainer.appendChild(staticH1);
             staticViewContainer.appendChild(buttonContainer);
 
-            // Now append the rest of the content (the brackets)
             staticViewContent.querySelectorAll('.bracket-container, h2').forEach(el => {
                  staticViewContainer.appendChild(el);
             });
@@ -572,30 +582,76 @@
             document.getElementById('interactive-view').style.display = 'block';
         }
 
-        function downloadCSV() {
-            let csvContent = "Category,Round,MatchID,PredictedWinner\n";
+        function submitToGoogleForm() {
+            let csvData = "Category,Round,MatchID,PredictedWinner\n";
             document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {
                 const checkedRadio = matchup.querySelector('input:checked');
                 const [category, roundKey] = matchup.id.split('-');
-                csvContent += `${category},${roundKey},${matchup.id},${checkedRadio ? checkedRadio.value : "NONE"}\n`;
+                csvData += `${category},${roundKey},${matchup.id},${checkedRadio ? checkedRadio.value : "NONE"}\n`;
             });
 
-            const baseFilename = participantName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const filename = `${baseFilename}_predictions.csv`;
+            const hiddenForm = document.createElement('form');
+            hiddenForm.action = googleFormConfig.action_url;
+            hiddenForm.method = 'POST';
+            hiddenForm.target = '_blank';
 
-            const link = document.createElement("a");
-            const file = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            link.href = URL.createObjectURL(file);
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
+            const nameInput = document.createElement('input');
+            nameInput.type = 'hidden';
+            nameInput.name = googleFormConfig.name_entry;
+            nameInput.value = participantName;
+            hiddenForm.appendChild(nameInput);
+
+            const dataInput = document.createElement('input');
+            dataInput.type = 'hidden';
+            dataInput.name = googleFormConfig.data_entry;
+            dataInput.value = csvData;
+            hiddenForm.appendChild(dataInput);
+
+            document.body.appendChild(hiddenForm);
+            hiddenForm.submit();
+            document.body.removeChild(hiddenForm);
+        }
+
+        function autoFillRound(roundKey) {
+            ['mens', 'womens'].forEach(category => {
+                const matchups = document.querySelectorAll(`#interactive-view #${category}-${roundKey} .matchup`);
+                matchups.forEach((matchup) => {
+                    const alreadySelected = matchup.querySelector('input[type="radio"]:checked');
+                    if (alreadySelected) return;
+
+                    const players = matchup.querySelectorAll('label.player');
+                    if (players.length === 2) {
+                        const randomIndex = Math.floor(Math.random() * 2);
+                        const selectedLabel = players[randomIndex];
+                        const selectedRadio = selectedLabel.querySelector('input[type="radio"]');
+
+                        if (selectedRadio && selectedRadio.value) {
+                            selectedRadio.checked = true;
+                            const changeEvent = new Event('change', { bubbles: true });
+                            selectedRadio.dispatchEvent(changeEvent);
+                        }
+                    }
+                });
+            });
         }
 
         // Initial setup
         createBracket('mens-bracket', initialMatchups.mens, 'mens');
         createBracket('womens-bracket', initialMatchups.womens, 'womens');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('dev') === 'true') {
+            const devControlsContainer = document.getElementById('dev-controls');
+            devControlsContainer.style.display = 'flex';
+
+            rounds.forEach(round => {
+                const btn = document.createElement('button');
+                btn.className = 'action-button dev-button';
+                btn.textContent = `Fill ${round.name}`;
+                btn.onclick = () => autoFillRound(round.key);
+                devControlsContainer.appendChild(btn);
+            });
+        }
     </script>
 </body>
 </html>
