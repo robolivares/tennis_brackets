@@ -52,7 +52,10 @@ def parse_entrants(filepath="entrants.txt"):
     return mens_matchups, womens_matchups
 
 def read_prediction_file(filepath):
-    """Reads a single prediction CSV and returns a dictionary of picks."""
+    """
+    Reads a single prediction CSV and returns a dictionary of picks.
+    Safely skips blank or malformed rows.
+    """
     picks = {}
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -63,8 +66,12 @@ def read_prediction_file(filepath):
                 return {} # Handle empty file
 
             for i, row in enumerate(reader):
-                if not row or len(row) != 4:
+                if not row: continue # Skips blank lines
+
+                if len(row) != 4:
+                    print(f"Warning: Skipping malformed row #{i+2} in {os.path.basename(filepath)}: {row}")
                     continue
+
                 _, _, match_id, predicted_winner = row
                 if predicted_winner and predicted_winner.strip() != "NONE":
                     picks[match_id.strip()] = predicted_winner.strip()
@@ -81,8 +88,12 @@ def create_viewer_data(predictions_dir, entrants_file):
     if mens_entrants is None:
         return None
 
+    mens_seed_map = {name: seed for seed, name in [player for matchup in mens_entrants for player in matchup]}
+    womens_seed_map = {name: seed for seed, name in [player for matchup in womens_entrants for player in matchup]}
+
     viewer_data = {
         "initial_entrants": { "mens": mens_entrants, "womens": womens_entrants },
+        "seed_map": { "mens": mens_seed_map, "womens": womens_seed_map },
         "actual_results": None,
         "participants": []
     }
@@ -109,7 +120,7 @@ def create_viewer_data(predictions_dir, entrants_file):
 
     return viewer_data
 
-def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
+def generate_viewer_html(viewer_data, output_path):
     """Generates the master viewer HTML file with all data embedded."""
 
     html_template = f"""
@@ -225,8 +236,11 @@ def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
                         const p1Name = participantPicks[p1MatchupId] || "TBD";
                         const p2Name = participantPicks[p2MatchupId] || "TBD";
 
-                        player1 = ["", p1Name];
-                        player2 = ["", p2Name];
+                        const p1Seed = viewerData.seed_map[category][p1Name] || "";
+                        const p2Seed = viewerData.seed_map[category][p2Name] || "";
+
+                        player1 = [p1Seed, p1Name];
+                        player2 = [p2Seed, p2Name];
                     }}
 
                     const predictedWinner = participantPicks[matchupId];
@@ -239,11 +253,11 @@ def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
                     if (predictedWinner === player2[1]) p2Classes.push('winner');
 
                     if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner) {{
-                        const winnerSpan = (predictedWinner === player1[1]) ? p1Classes : p2Classes;
+                        const winnerSpanClasses = (predictedWinner === player1[1]) ? p1Classes : p2Classes;
                         if (predictedWinner === actualWinner) {{
-                            winnerSpan.push('correct-pick');
+                            winnerSpanClasses.push('correct-pick');
                         }} else {{
-                            winnerSpan.push('incorrect-pick');
+                            winnerSpanClasses.push('incorrect-pick');
                         }}
                     }}
 
@@ -255,7 +269,7 @@ def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
                     if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner && predictedWinner !== actualWinner) {{
                         const note = document.createElement('div');
                         note.className = 'actual-winner-note';
-                        note.textContent = `Actual winner: ${{actualWinner}}`;
+                        note.textContent = `Actual: ${{actualWinner}}`;
                         matchupDiv.appendChild(note);
                     }}
                     matchupWrapper.appendChild(matchupDiv);
@@ -341,10 +355,13 @@ def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate a master viewer HTML for tournament brackets.")
+    parser = argparse.ArgumentParser(
+        description="Generate a master viewer HTML for tournament brackets.",
+        epilog="Example: python generate_viewer.py -b ./all_brackets -e ./entrants.txt"
+    )
     parser.add_argument(
         '-b', '--board',
-        required=True,
+        required=True, # Flag is now mandatory
         metavar='DIRECTORY',
         help="Directory containing all prediction files."
     )
@@ -360,5 +377,8 @@ if __name__ == "__main__":
     else:
         viewer_data = create_viewer_data(args.board, args.entrants)
         if viewer_data:
-            generate_viewer_html(viewer_data)
+            # UPDATED: Save the file as index.html inside the specified directory
+            output_filename = "index.html"
+            output_filepath = os.path.join(args.board, output_filename)
+            generate_viewer_html(viewer_data, output_filepath)
 

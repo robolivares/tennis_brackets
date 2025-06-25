@@ -1,34 +1,34 @@
 mens
-Jannik Sinner vs Miomir Kecmanovic
-Denis Shapovalov vs Ben Shelton
-Grigor Dimitrov vs Gael Monfils
-Jan-Lennard Struff vs Daniil Medvedev
-Carlos Alcaraz vs Frances Tiafoe
-Brandon Nakashima vs Ugo Humbert
-Tommy Paul vs Alexander Bublik
+(1) Jannik Sinner vs Miomir Kecmanovic
+(PR) Denis Shapovalov vs (14) Ben Shelton
+(10) Grigor Dimitrov vs Gael Monfils
+Jan-Lennard Struff vs (5) Daniil Medvedev
+(3) Carlos Alcaraz vs (29) Frances Tiafoe
+Brandon Nakashima vs (16) Ugo Humbert
+(12) Tommy Paul vs (23) Alexander Bublik
 Roberto Bautista Agut vs Fabio Fognini
-Francisco Comesana vs Lorenzo Musetti
-G. Mpetshi Perricard vs Emil Ruusuvuori
-Taylor Fritz vs Alejandro Tabilo
-Cameron Norrie vs Alexander Zverev
+Francisco Comesana vs (25) Lorenzo Musetti
+(LL) G. Mpetshi Perricard vs Emil Ruusuvuori
+(13) Taylor Fritz vs (24) Alejandro Tabilo
+Cameron Norrie vs (4) Alexander Zverev
 Arthur Fils vs Roman Safiullin
-Lucas Pouille vs Alex de Minaur
-Holger Rune vs Quentin Halys
-Alex Popyrin vs Novak Djokovic
+(Q) Lucas Pouille vs (9) Alex de Minaur
+(15) Holger Rune vs (Q) Quentin Halys
+Alex Popyrin vs (2) Novak Djokovic
 womens
-Iga Swiatek vs Yulia Putintseva
-Bernarda Pera vs Jelena Ostapenko
-Danielle Collins vs Beatriz Haddad Maia
-Barbora Krejcikova vs Jessica Bouzas Maneiro
-Elena Rybakina vs Caroline Wozniacki
-Anna Kalinskaya vs Liudmila Samsonova
-Ons Jabeur vs Elina Svitolina
+(1) Iga Swiatek vs Yulia Putintseva
+Bernarda Pera vs (13) Jelena Ostapenko
+(11) Danielle Collins vs (20) Beatriz Haddad Maia
+(31) Barbora Krejcikova vs Jessica Bouzas Maneiro
+(4) Elena Rybakina vs (WC) Caroline Wozniacki
+(17) Anna Kalinskaya vs (15) Liudmila Samsonova
+(10) Ons Jabeur vs (21) Elina Svitolina
 Harriet Dart vs Xin Wang
-Lulu Sun vs Zhun Lin
-Emma Raducanu vs Maria Sakkari
-Daria Kasatkina vs Paula Badosa
-Dayana Yastremska vs Dona Vekic
-Jasmine Paolini vs Bianca Andreescu
-Marta Kostyuk vs Madison Keys
-Diana Shnaider vs Emma Navarro
-Sonay Kartal vs Coco Gauff
+(Q) Lulu Sun vs Zhun Lin
+(WC) Emma Raducanu vs (9) Maria Sakkari
+(14) Daria Kasatkina vs (PR) Paula Badosa
+(28) Dayana Yastremska vs Dona Vekic
+(7) Jasmine Paolini vs (PR) Bianca Andreescu
+(18) Marta Kostyuk vs (12) Madison Keys
+Diana Shnaider vs (19) Emma Navarro
+(Q) Sonay Kartal vs (2) Coco Gauff
