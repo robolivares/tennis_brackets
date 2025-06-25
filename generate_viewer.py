@@ -1,0 +1,253 @@
+import os
+import csv
+import json
+import argparse
+from collections import defaultdict
+
+def read_prediction_file(filepath):
+    """
+    Reads a single prediction CSV and returns a dictionary of picks.
+    Now safely skips blank or malformed rows.
+    """
+    picks = {}
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            try:
+                next(reader)  # Skip header
+            except StopIteration:
+                return {} # Handle empty file
+
+            for i, row in enumerate(reader):
+                if not row:  # Skips blank lines
+                    continue
+
+                if len(row) != 4:
+                    print(f"Warning: Skipping malformed row #{i+2} in {os.path.basename(filepath)}: {row}")
+                    continue
+
+                _, _, match_id, predicted_winner = row
+                if predicted_winner and predicted_winner.strip() != "NONE":
+                    picks[match_id.strip()] = predicted_winner.strip()
+    except Exception as e:
+        print(f"Warning: Could not read or process file {filepath}. Error: {e}")
+        return None
+    return picks
+
+def create_viewer_data(predictions_dir):
+    """Reads all prediction files and the master file from a directory."""
+    master_filename = "actual_results_predictions.csv"
+    viewer_data = {
+        "actual_results": None,
+        "participants": []
+    }
+
+    master_filepath = os.path.join(predictions_dir, master_filename)
+    if not os.path.exists(master_filepath):
+        print(f"Error: The master results file '{master_filename}' was not found in '{predictions_dir}'.")
+        print("Please create it by filling out a bracket with the actual results and saving it with the name 'actual_results'.")
+        return None
+
+    # Load the actual results from the master file
+    viewer_data["actual_results"] = read_prediction_file(master_filepath)
+    if viewer_data["actual_results"] is None:
+        print(f"Error: Could not read the master results file '{master_filename}'.")
+        return None
+
+    # Load each participant's predictions
+    for filename in sorted(os.listdir(predictions_dir)):
+        if filename.endswith("_predictions.csv") and filename != master_filename:
+            filepath = os.path.join(predictions_dir, filename)
+            player_name = filename.replace("_predictions.csv", "").replace("_", " ").title()
+            picks = read_prediction_file(filepath)
+            if picks:
+                viewer_data["participants"].append({
+                    "name": player_name,
+                    "picks": picks
+                })
+
+    return viewer_data
+
+def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
+    """Generates the master viewer HTML file with all data embedded."""
+
+    # This logic is incomplete. It needs to be fixed to render the brackets.
+    # For now, it will just show the structure.
+
+    html_template = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Bracket Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 2em;
+            background-color: #f0f4f7; color: #333;
+        }}
+        h1, h2, h3 {{ text-align: center; color: #005A31; }}
+        h1 {{ font-size: 2.5em; margin-bottom: 0.25em; }}
+        h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
+        h3 {{ font-size: 1.2em; margin-bottom: 1em; color: #4A0072; }}
+
+        .tab-nav {{
+            display: flex; justify-content: center; flex-wrap: wrap;
+            gap: 10px; margin-bottom: 2em; border-bottom: 2px solid #ddd; padding-bottom: 1em;
+        }}
+        .tab-button {{
+            padding: 0.8em 1.5em; font-size: 1em; font-weight: bold;
+            border: 2px solid #4A0072; background-color: #fff; color: #4A0072;
+            border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s;
+        }}
+        .tab-button:hover {{ background-color: #f0e6f6; }}
+        .tab-button.active {{ background-color: #4A0072; color: #fff; }}
+
+        .tab-content {{ display: none; }}
+        .tab-content.active {{ display: block; }}
+
+        .bracket-container {{ display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }}
+        .round {{ display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }}
+        .round-title {{ font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; }}
+        .matchup-wrapper {{ display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; }}
+
+        .matchup {{
+            background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            width: 270px; position: relative;
+        }}
+        .matchup-wrapper > .matchup:not(:last-child) {{ margin-bottom: 28px; }}
+
+        .player {{ display: flex; align-items: center; margin: 8px 0; border-radius: 5px; }}
+        .player-seed {{ font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }}
+        .player-name {{ flex-grow: 1; font-size: 1em; color: #333; }}
+        .player-name.winner {{ font-weight: bold; color: #005A31; }}
+        .tbd {{ font-style: italic; color: #999; }}
+
+        .player-name.correct-pick {{ background-color: #d4edda; border-radius: 3px; padding: 2px 4px; }}
+        .player-name.incorrect-pick {{ background-color: #f8d7da; text-decoration: line-through; border-radius: 3px; padding: 2px 4px; }}
+        .actual-winner-note {{ font-size: 0.8em; color: #005A31; margin-left: 5px; padding-top: 5px; }}
+
+        .champion-container {{ display: flex; align-items: center; justify-content: center; }}
+        .champion-box {{ display: flex; flex-direction: column; align-items: center; justify-content: center; }}
+        .champion-trophy {{ font-size: 4em; color: #d4af37; line-height: 1; }}
+        .champion-name {{ font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-height: 30px; text-align: center; }}
+        #score-summary {{ margin-bottom: 1.5em; font-size: 1.2em; font-weight: bold; }}
+    </style>
+</head>
+<body>
+    <h1>Tournament Results Viewer</h1>
+    <div id="tab-navigation" class="tab-nav"></div>
+    <div id="tab-contents"></div>
+
+    <script>
+        const viewerData = {json.dumps(viewer_data, indent=4)};
+
+        const rounds = [
+            {{ "name": "Round of 32", "key": "r32", "matches": 16 }},
+            {{ "name": "Round of 16", "key": "r16", "matches": 8 }},
+            {{ "name": "Quarterfinals", "key": "qf", "matches": 4 }},
+            {{ "name": "Semifinals", "key": "sf", "matches": 2 }},
+            {{ "name": "Final", "key": "f", "matches": 1 }}
+        ];
+
+        const pointsPerRound = {{'r32': 1, 'r16': 2, 'qf': 4, 'sf': 8, 'f': 16}};
+
+        function getPlayerFromPicks(matchupId, picks) {{
+            return picks[matchupId] || "TBD";
+        }}
+
+        // This function needs to be completed to properly render the brackets
+        function createBracketDisplay(container, category, participantPicks) {{
+             container.innerHTML = `<p style="text-align:center; padding: 2em; background-color: #fff3cd; border-radius: 8px;">Bracket rendering logic needs to be implemented.</p>`;
+        }}
+
+        function calculateScores(participantPicks) {{
+            let totalScore = 0;
+            const roundScores = {{}};
+            for (const matchId in participantPicks) {{
+                if (viewerData.actual_results[matchId] && participantPicks[matchId] === viewerData.actual_results[matchId]) {{
+                    const roundKey = matchId.split('-')[1];
+                    const points = pointsPerRound[roundKey] || 0;
+                    totalScore += points;
+                    roundScores[roundKey] = (roundScores[roundKey] || 0) + points;
+                }}
+            }}
+            return {{ totalScore, roundScores }};
+        }}
+
+        function openTab(event, tabId) {{
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabId).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }}
+
+        function setupViewer() {{
+            const navContainer = document.getElementById('tab-navigation');
+            const contentContainer = document.getElementById('tab-contents');
+
+            const allParticipants = [{{"name": "Actual Results", "picks": viewerData.actual_results}}, ...viewerData.participants];
+
+            allParticipants.forEach((p, index) => {{
+                const nameKey = p.name.replace(/\\s+/g, '-');
+                const tabId = `${{nameKey}}-tab`;
+
+                const btn = document.createElement('button');
+                btn.className = 'tab-button';
+                btn.textContent = p.name;
+                btn.onclick = (e) => openTab(e, tabId);
+                navContainer.appendChild(btn);
+
+                const tab = document.createElement('div');
+                tab.id = tabId;
+                tab.className = 'tab-content';
+
+                const scoreData = calculateScores(p.picks);
+                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${{scoreData.totalScore}} pts</h3>` : '';
+
+                tab.innerHTML = scoreHtml + `
+                    <h2>Men's Singles</h2><div id="${{nameKey}}-mens-bracket" class="bracket-container"></div>
+                    <h2>Women's Singles</h2><div id="${{nameKey}}-womens-bracket" class="bracket-container"></div>`;
+                contentContainer.appendChild(tab);
+
+                createBracketDisplay(tab.querySelector(`#${{nameKey}}-mens-bracket`), 'mens', p.picks);
+                createBracketDisplay(tab.querySelector(`#${{nameKey}}-womens-bracket`), 'womens', p.picks);
+
+                if (index === 0) {{
+                    btn.classList.add('active');
+                    tab.style.display = 'block';
+                }}
+            }});
+        }}
+
+        setupViewer();
+    </script>
+</body>
+</html>
+    """
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html_template)
+    print(f"Successfully generated viewer HTML at: {output_path}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Generate a master viewer HTML for tournament brackets.")
+    parser.add_argument(
+        '-b', '--board',
+        required=True,
+        metavar='DIRECTORY',
+        help="Directory containing all prediction files, including 'actual_results_predictions.csv'."
+    )
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.board):
+        print(f"Error: Directory '{args.board}' not found.")
+    else:
+        viewer_data = create_viewer_data(args.board)
+        if viewer_data:
+            generate_viewer_html(viewer_data)
+
