@@ -2,13 +2,57 @@ import os
 import csv
 import json
 import argparse
+import re
 from collections import defaultdict
 
+def parse_entrants(filepath="entrants.txt"):
+    """
+    Parses the entrants.txt file to get initial matchups, including seeding.
+    This is needed to know the original R32 matchups.
+    """
+    if not os.path.exists(filepath):
+        print(f"Error: entrants.txt not found. It's needed to build the viewer.")
+        return None, None
+
+    mens_matchups = []
+    womens_matchups = []
+    current_category = None
+    player_regex = re.compile(r"\((.*?)\)\s*(.*)|(^[^\(]+)")
+
+    def parse_player(p_str):
+        match = player_regex.match(p_str.strip())
+        if match:
+            if match.group(1) is not None:
+                return (match.group(1), match.group(2).strip())
+            elif match.group(3) is not None:
+                return ("", match.group(3).strip())
+        return ("", p_str)
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line: continue
+            if line.lower() == 'mens':
+                current_category = 'mens'
+                continue
+            elif line.lower() == 'womens':
+                current_category = 'womens'
+                continue
+
+            if 'vs' in line and current_category:
+                p1_str, p2_str = [p.strip() for p in line.split('vs')]
+                player1 = parse_player(p1_str)
+                player2 = parse_player(p2_str)
+
+                if current_category == 'mens':
+                    mens_matchups.append([player1, player2])
+                elif current_category == 'womens':
+                    womens_matchups.append([player1, player2])
+
+    return mens_matchups, womens_matchups
+
 def read_prediction_file(filepath):
-    """
-    Reads a single prediction CSV and returns a dictionary of picks.
-    Now safely skips blank or malformed rows.
-    """
+    """Reads a single prediction CSV and returns a dictionary of picks."""
     picks = {}
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -19,13 +63,8 @@ def read_prediction_file(filepath):
                 return {} # Handle empty file
 
             for i, row in enumerate(reader):
-                if not row:  # Skips blank lines
+                if not row or len(row) != 4:
                     continue
-
-                if len(row) != 4:
-                    print(f"Warning: Skipping malformed row #{i+2} in {os.path.basename(filepath)}: {row}")
-                    continue
-
                 _, _, match_id, predicted_winner = row
                 if predicted_winner and predicted_winner.strip() != "NONE":
                     picks[match_id.strip()] = predicted_winner.strip()
@@ -34,10 +73,16 @@ def read_prediction_file(filepath):
         return None
     return picks
 
-def create_viewer_data(predictions_dir):
+def create_viewer_data(predictions_dir, entrants_file):
     """Reads all prediction files and the master file from a directory."""
     master_filename = "actual_results_predictions.csv"
+
+    mens_entrants, womens_entrants = parse_entrants(entrants_file)
+    if mens_entrants is None:
+        return None
+
     viewer_data = {
+        "initial_entrants": { "mens": mens_entrants, "womens": womens_entrants },
         "actual_results": None,
         "participants": []
     }
@@ -45,16 +90,12 @@ def create_viewer_data(predictions_dir):
     master_filepath = os.path.join(predictions_dir, master_filename)
     if not os.path.exists(master_filepath):
         print(f"Error: The master results file '{master_filename}' was not found in '{predictions_dir}'.")
-        print("Please create it by filling out a bracket with the actual results and saving it with the name 'actual_results'.")
         return None
 
-    # Load the actual results from the master file
     viewer_data["actual_results"] = read_prediction_file(master_filepath)
     if viewer_data["actual_results"] is None:
-        print(f"Error: Could not read the master results file '{master_filename}'.")
         return None
 
-    # Load each participant's predictions
     for filename in sorted(os.listdir(predictions_dir)):
         if filename.endswith("_predictions.csv") and filename != master_filename:
             filepath = os.path.join(predictions_dir, filename)
@@ -70,9 +111,6 @@ def create_viewer_data(predictions_dir):
 
 def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
     """Generates the master viewer HTML file with all data embedded."""
-
-    # This logic is incomplete. It needs to be fixed to render the brackets.
-    # For now, it will just show the structure.
 
     html_template = f"""
 <!DOCTYPE html>
@@ -156,13 +194,81 @@ def generate_viewer_html(viewer_data, output_path="master_viewer.html"):
 
         const pointsPerRound = {{'r32': 1, 'r16': 2, 'qf': 4, 'sf': 8, 'f': 16}};
 
-        function getPlayerFromPicks(matchupId, picks) {{
-            return picks[matchupId] || "TBD";
-        }}
-
-        // This function needs to be completed to properly render the brackets
         function createBracketDisplay(container, category, participantPicks) {{
-             container.innerHTML = `<p style="text-align:center; padding: 2em; background-color: #fff3cd; border-radius: 8px;">Bracket rendering logic needs to be implemented.</p>`;
+            container.innerHTML = '';
+
+            rounds.forEach((round, roundIndex) => {{
+                const roundDiv = document.createElement('div');
+                roundDiv.classList.add('round');
+                const roundTitle = document.createElement('div');
+                roundTitle.classList.add('round-title');
+                roundTitle.textContent = round.name;
+                roundDiv.appendChild(roundTitle);
+                const matchupWrapper = document.createElement('div');
+                matchupWrapper.classList.add('matchup-wrapper');
+
+                for (let i = 0; i < round.matches; i++) {{
+                    const matchupId = `${{category}}-${{round.key}}-match-${{i}}`;
+                    const matchupDiv = document.createElement('div');
+                    matchupDiv.classList.add('matchup');
+
+                    let player1, player2;
+
+                    if (roundIndex === 0) {{
+                        player1 = viewerData.initial_entrants[category][i][0];
+                        player2 = viewerData.initial_entrants[category][i][1];
+                    }} else {{
+                        const prevRoundKey = rounds[roundIndex - 1].key;
+                        const p1MatchupId = `${{category}}-${{prevRoundKey}}-match-${{i * 2}}`;
+                        const p2MatchupId = `${{category}}-${{prevRoundKey}}-match-${{i * 2 + 1}}`;
+
+                        const p1Name = participantPicks[p1MatchupId] || "TBD";
+                        const p2Name = participantPicks[p2MatchupId] || "TBD";
+
+                        player1 = ["", p1Name];
+                        player2 = ["", p2Name];
+                    }}
+
+                    const predictedWinner = participantPicks[matchupId];
+                    const actualWinner = viewerData.actual_results[matchupId];
+
+                    const p1Classes = ['player-name'];
+                    if (predictedWinner === player1[1]) p1Classes.push('winner');
+
+                    const p2Classes = ['player-name'];
+                    if (predictedWinner === player2[1]) p2Classes.push('winner');
+
+                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner) {{
+                        const winnerSpan = (predictedWinner === player1[1]) ? p1Classes : p2Classes;
+                        if (predictedWinner === actualWinner) {{
+                            winnerSpan.push('correct-pick');
+                        }} else {{
+                            winnerSpan.push('incorrect-pick');
+                        }}
+                    }}
+
+                    matchupDiv.innerHTML = `
+                        <div class="player"><span class="player-seed">${{player1[0]}}</span><span class="${{p1Classes.join(' ')}}">${{player1[1]}}</span></div>
+                        <div class="player"><span class="player-seed">${{player2[0]}}</span><span class="${{p2Classes.join(' ')}}">${{player2[1]}}</span></div>
+                    `;
+
+                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner && predictedWinner !== actualWinner) {{
+                        const note = document.createElement('div');
+                        note.className = 'actual-winner-note';
+                        note.textContent = `Actual winner: ${{actualWinner}}`;
+                        matchupDiv.appendChild(note);
+                    }}
+                    matchupWrapper.appendChild(matchupDiv);
+                }}
+                roundDiv.appendChild(matchupWrapper);
+                container.appendChild(roundDiv);
+            }});
+
+            const championContainer = document.createElement('div');
+            championContainer.classList.add('champion-container');
+            const finalWinner = participantPicks[`${{category}}-f-match-0`] || "";
+            championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div class="champion-name">${{finalWinner}}</div></div>`;
+            container.appendChild(championContainer);
         }}
 
         function calculateScores(participantPicks) {{
@@ -240,14 +346,19 @@ if __name__ == "__main__":
         '-b', '--board',
         required=True,
         metavar='DIRECTORY',
-        help="Directory containing all prediction files, including 'actual_results_predictions.csv'."
+        help="Directory containing all prediction files."
+    )
+    parser.add_argument(
+        '-e', '--entrants',
+        default='entrants.txt',
+        help="Path to the entrants.txt file (default: entrants.txt)."
     )
     args = parser.parse_args()
 
     if not os.path.isdir(args.board):
         print(f"Error: Directory '{args.board}' not found.")
     else:
-        viewer_data = create_viewer_data(args.board)
+        viewer_data = create_viewer_data(args.board, args.entrants)
         if viewer_data:
             generate_viewer_html(viewer_data)
 
