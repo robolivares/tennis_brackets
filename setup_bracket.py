@@ -2,11 +2,12 @@ import json
 import os
 import csv
 import re
+import argparse
 
 def parse_entrants(filepath="entrants.txt"):
     """
-    Parses the entrants.txt file to get initial matchups, including seeding.
-    New format: (1) Player Name vs (16) Other Player
+    Parses the entrants.txt file to get initial matchups for a 32-player draw.
+    Expects 16 matchups per category.
     """
     if not os.path.exists(filepath):
         return None, None
@@ -14,19 +15,16 @@ def parse_entrants(filepath="entrants.txt"):
     mens_matchups = []
     womens_matchups = []
     current_category = None
-    # Regex to capture seed (in parentheses) and player name
     player_regex = re.compile(r"\((.*?)\)\s*(.*)|(^[^\(]+)")
 
     def parse_player(p_str):
         match = player_regex.match(p_str.strip())
         if match:
-            # Handles format (seed) Player Name
             if match.group(1) is not None:
                 return (match.group(1), match.group(2).strip())
-            # Handles format Player Name (no seed)
             elif match.group(3) is not None:
                 return ("", match.group(3).strip())
-        return ("", p_str) # Fallback
+        return ("", p_str)
 
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
@@ -53,11 +51,10 @@ def parse_entrants(filepath="entrants.txt"):
 
 def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
     """
-    Generates the final, polished interactive HTML bracket file with Google Form integration and Dev Mode.
+    Generates the final, polished interactive HTML bracket file with Google Form integration.
     """
     js_matchups = {"mens": mens_matchups, "womens": womens_matchups}
 
-    # These are the unique IDs from your Google Form for the "Name" and "Prediction Data" fields.
     google_form_config = {
         "action_url": "https://docs.google.com/forms/d/e/1FAIpQLScZYp9PTDpzzOUJD7tXRG8hzMy3Lah_h1bERTQozYz65eD-4g/formResponse",
         "name_entry": "entry.2093168041",
@@ -84,6 +81,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
         .instructions {{ max-width: 600px; margin: 0 auto 2em auto; padding: 1em; background-color: #e6f3ff; border: 1px solid #b3d9ff; border-radius: 8px; text-align: left; }}
         .instructions ol {{ padding-left: 25px; margin: 0; }}
+        .instructions li {{ margin-bottom: 0.5em; }}
 
         .bracket-container {{ display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }}
         .round {{ display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }}
@@ -99,6 +97,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         .player {{ display: flex; align-items: center; margin: 8px 0; border-radius: 5px; transition: background-color 0.2s; }}
         .interactive .player {{ cursor: pointer; }}
         .interactive .player:hover {{ background-color: #f0f8ff; }}
+        .static .player {{ cursor: default; }}
 
         .player-seed {{ font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }}
         .player-name {{ flex-grow: 1; font-size: 1em; color: #333; }}
@@ -120,23 +119,16 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         #interactive-view {{ display: block; }}
         #static-view {{ display: none; }}
-
-        #dev-controls {{ display: none; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 2em; padding: 1em; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; }}
-        .dev-button {{ background-color: #c82333; font-size: 0.9em; padding: 0.5em 1em; width: auto; margin: 0; }}
     </style>
 </head>
 <body>
     <div id="interactive-view">
         <h1>Tournament Bracket Challenge</h1>
-
-        <div id="dev-controls">
-            <!-- Dev buttons will be injected here -->
-        </div>
-
         <div class="instructions">
           <ol>
-            <li>Fill in your bracket by clicking your predicted winner for each match.</li>
+            <li>Fill in the <strong>entire brackets</strong> by clicking your predicted winner for each match.</li>
             <li>Once finished, click the "Lock In & Review" button to see a summary of your picks.</li>
+            <li><strong>Scoring:</strong> Points per correct pick are: Round of 32 (2), Round of 16 (3), Quarterfinals (5), Semifinals (8), Final (13).</li>
           </ol>
         </div>
 
@@ -177,7 +169,7 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
                 roundDiv.appendChild(roundTitle);
                 const matchupWrapper = document.createElement('div');
                 matchupWrapper.classList.add('matchup-wrapper');
-                const numMatches = initialData.length / Math.pow(2, roundIndex);
+                const numMatches = 16 / Math.pow(2, roundIndex);
                 for (let i = 0; i < numMatches; i++) {{
                     const matchupDiv = document.createElement('div');
                     matchupDiv.classList.add('matchup');
@@ -205,49 +197,51 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
             championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div id="${{category}}-champion-name" class="champion-name"></div></div>`;
             bracketContainer.appendChild(championContainer);
 
-            addEventListeners(category);
+            addEventListeners(containerId);
         }}
 
-        function addEventListeners(category) {{
-            document.getElementById(`${{category}}-bracket`).addEventListener('change', (event) => {{
+        function addEventListeners(containerId) {{
+            document.getElementById(`${{containerId}}`).addEventListener('change', (event) => {{
                 if (event.target.type === 'radio') {{
-                    const selectedName = event.target.value;
                     const selectedLabel = event.target.closest('.player');
-                    const selectedSeed = selectedLabel.querySelector('.player-seed').textContent;
-                    const nameParts = event.target.name.split('-');
-                    const roundKey = nameParts[1];
-                    const matchIndex = parseInt(nameParts[3], 10);
-                    document.getElementById(event.target.name).querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
+                    selectedLabel.parentElement.querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
                     selectedLabel.querySelector('.player-name').classList.add('winner');
-                    updateNextRound(category, roundKey, matchIndex, {{seed: selectedSeed, name: selectedName}});
-                    if(roundKey === 'f'){{
-                        document.getElementById(`${{category}}-champion-name`).textContent = selectedName;
-                    }}
+                    updateNextRound(event.target.name, {{
+                        seed: selectedLabel.querySelector('.player-seed').textContent,
+                        name: event.target.value
+                    }});
                 }}
             }});
         }}
 
-        function updateNextRound(category, roundKey, matchIndex, winner) {{
+        function updateNextRound(matchupId, winner) {{
+            const parts = matchupId.split('-');
+            const category = parts[0];
+            const roundKey = parts[1];
+            const matchIndex = parseInt(parts[3], 10);
+
             const currentRoundIndex = rounds.findIndex(r => r.key === roundKey);
-            if (currentRoundIndex >= rounds.length - 1) return;
+            if (currentRoundIndex >= rounds.length - 1) {{
+                document.getElementById(`${{category}}-champion-name`).textContent = winner.name;
+                return;
+            }}
+
             const nextRound = rounds[currentRoundIndex + 1];
             const nextMatchIndex = Math.floor(matchIndex / 2);
             const playerSlot = matchIndex % 2;
             const nextMatchupId = `${{category}}-${{nextRound.key}}-match-${{nextMatchIndex}}`;
             const nextMatchupDiv = document.getElementById(nextMatchupId);
+
             if (nextMatchupDiv) {{
                 const playerLabel = nextMatchupDiv.querySelectorAll('.player')[playerSlot];
-                const playerInput = playerLabel.querySelector('input');
-                const playerNameSpan = playerLabel.querySelector('.player-name');
-                const playerSeedSpan = playerLabel.querySelector('.player-seed');
-                if (nextMatchupDiv.querySelector('input:checked')?.value === playerInput.value) {{
-                    updateNextRound(category, nextRound.key, nextMatchIndex, {{seed:'', name:'To Be Decided'}});
-                     if(nextRound.key === 'f'){{ document.getElementById(`${{category}}-champion-name`).textContent = ''; }}
+                if (nextMatchupDiv.querySelector('input:checked')?.value === playerLabel.querySelector('input').value) {{
+                     updateNextRound(nextMatchupId, {{seed:'', name:'To Be Decided'}});
                 }}
-                playerInput.value = winner.name;
-                playerNameSpan.textContent = winner.name;
-                playerSeedSpan.textContent = winner.seed;
-                playerNameSpan.classList.toggle('tbd', winner.name === 'To Be Decided');
+                playerLabel.querySelector('input').value = winner.name;
+                playerLabel.querySelector('.player-name').textContent = winner.name;
+                playerLabel.querySelector('.player-seed').textContent = winner.seed;
+                playerLabel.querySelector('.player-name').classList.toggle('tbd', winner.name === 'To Be Decided');
+
                 nextMatchupDiv.querySelectorAll('input').forEach(i => i.checked = false);
                 nextMatchupDiv.querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
             }}
@@ -256,9 +250,12 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
         function lockInBracket() {{
             let allPicksMade = true;
             document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {{
-                if (!matchup.querySelector('input:checked')) {{ allPicksMade = false; }}
+                const firstPlayer = matchup.querySelector('.player:first-child .player-name');
+                if (firstPlayer && firstPlayer.textContent !== 'To Be Decided' && !matchup.querySelector('input:checked')) {{
+                    allPicksMade = false;
+                }}
             }});
-            if (!allPicksMade) {{ alert("Please complete the entire bracket before continuing!"); return; }}
+            if (!allPicksMade) {{ alert("Please complete the entire brackets before continuing!"); return; }}
 
             if (!participantName) {{
                 const name = prompt("Please enter your name:", "your_name");
@@ -275,11 +272,6 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
             staticViewContent.querySelector('.instructions').remove();
             staticViewContent.querySelector('#lock-in-btn').remove();
-
-            const devControlsInClone = staticViewContent.querySelector('#dev-controls');
-            if (devControlsInClone) {{
-                devControlsInClone.remove();
-            }}
 
             const staticBrackets = staticViewContent.querySelectorAll('.bracket-container');
             staticBrackets.forEach(bracket => {{
@@ -325,74 +317,33 @@ def generate_html(mens_matchups, womens_matchups, output_path="bracket.html"):
 
         function submitToGoogleForm() {{
             let csvData = "Category,Round,MatchID,PredictedWinner\\n";
-            document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {{
-                const checkedRadio = matchup.querySelector('input:checked');
-                const [category, roundKey] = matchup.id.split('-');
-                csvData += `${{category}},${{roundKey}},${{matchup.id}},${{checkedRadio ? checkedRadio.value : "NONE"}}\\n`;
+            document.querySelectorAll('#interactive-view .matchup input:checked').forEach(radio => {{
+                 const [category, roundKey] = radio.name.split('-');
+                 csvData += `${{category}},${{roundKey}},${{radio.name}},${{radio.value}}\\n`;
             }});
 
             const hiddenForm = document.createElement('form');
             hiddenForm.action = googleFormConfig.action_url;
             hiddenForm.method = 'POST';
             hiddenForm.target = '_blank';
-
             const nameInput = document.createElement('input');
             nameInput.type = 'hidden';
             nameInput.name = googleFormConfig.name_entry;
             nameInput.value = participantName;
             hiddenForm.appendChild(nameInput);
-
             const dataInput = document.createElement('input');
             dataInput.type = 'hidden';
             dataInput.name = googleFormConfig.data_entry;
             dataInput.value = csvData;
             hiddenForm.appendChild(dataInput);
-
             document.body.appendChild(hiddenForm);
             hiddenForm.submit();
             document.body.removeChild(hiddenForm);
         }}
 
-        function autoFillRound(roundKey) {{
-            ['mens', 'womens'].forEach(category => {{
-                const matchups = document.querySelectorAll(`#interactive-view #${{category}}-${{roundKey}} .matchup`);
-                matchups.forEach((matchup) => {{
-                    const alreadySelected = matchup.querySelector('input[type="radio"]:checked');
-                    if (alreadySelected) return;
-
-                    const players = matchup.querySelectorAll('label.player');
-                    if (players.length === 2) {{
-                        const randomIndex = Math.floor(Math.random() * 2);
-                        const selectedLabel = players[randomIndex];
-                        const selectedRadio = selectedLabel.querySelector('input[type="radio"]');
-
-                        if (selectedRadio && selectedRadio.value) {{
-                            selectedRadio.checked = true;
-                            const changeEvent = new Event('change', {{ bubbles: true }});
-                            selectedRadio.dispatchEvent(changeEvent);
-                        }}
-                    }}
-                }});
-            }});
-        }}
-
         // Initial setup
         createBracket('mens-bracket', initialMatchups.mens, 'mens');
         createBracket('womens-bracket', initialMatchups.womens, 'womens');
-
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('dev') === 'true') {{
-            const devControlsContainer = document.getElementById('dev-controls');
-            devControlsContainer.style.display = 'flex';
-
-            rounds.forEach(round => {{
-                const btn = document.createElement('button');
-                btn.className = 'action-button dev-button';
-                btn.textContent = `Fill ${{round.name}}`;
-                btn.onclick = () => autoFillRound(round.key);
-                devControlsContainer.appendChild(btn);
-            }});
-        }}
     </script>
 </body>
 </html>
@@ -409,17 +360,34 @@ def generate_results_template(output_path="actual_results.csv"):
 
 
 if __name__ == "__main__":
-    print("--- Bracket Generator ---")
-    mens_data, womens_matchups = parse_entrants()
+    parser = argparse.ArgumentParser(description="Generate an interactive HTML bracket for a tournament.")
+    parser.add_argument(
+        '-d', '--directory',
+        default='bracket',
+        help="The output directory for the generated files (default: bracket)."
+    )
+    args = parser.parse_args()
 
-    if not mens_data or not womens_matchups:
+    output_dir = args.directory
+    os.makedirs(output_dir, exist_ok=True)
+
+    print("--- Bracket Generator (Round of 32) ---")
+    mens_data, womens_data = parse_entrants()
+
+    if not mens_data or not womens_data:
         print("\nError: Could not find 'entrants.txt' or the file is empty.")
-    elif len(mens_data) != 16 or len(womens_matchups) != 16:
-        print(f"\nError: Incorrect number of matchups. Found {len(mens_data)} for men and {len(womens_matchups)} for women.")
+    elif len(mens_data) != 16 or len(womens_data) != 16:
+        print(f"\nError: Incorrect number of matchups found in entrants.txt.")
+        print(f"Expected 16 for each category, but found {len(mens_data)} for men and {len(womens_data)} for women.")
     else:
-        print("\nFound valid matchups. Generating files...")
-        generate_html(mens_data, womens_matchups)
-        generate_results_template()
-        print("\nSetup complete! You can now send 'bracket.html' to your friends.")
+        print("\nFound 16 matchups for Men and 16 for Women. Generating files...")
+        # UPDATED: Save files to the specified directory
+        output_html_path = os.path.join(output_dir, "index.html")
+        output_csv_path = os.path.join(output_dir, "actual_results.csv")
+
+        generate_html(mens_data, womens_data, output_html_path)
+        generate_results_template(output_csv_path)
+        print(f"\nSetup complete! Files generated in the '{output_dir}' directory.")
+        print(f"You can now send the '{output_html_path}' file to your friends.")
 
 
