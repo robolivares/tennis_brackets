@@ -66,7 +66,8 @@ def read_prediction_file(filepath):
                 return {} # Handle empty file
 
             for i, row in enumerate(reader):
-                if not row: continue # Skips blank lines
+                if not row:  # Skips blank lines
+                    continue
 
                 if len(row) != 4:
                     print(f"Warning: Skipping malformed row #{i+2} in {os.path.basename(filepath)}: {row}")
@@ -80,9 +81,24 @@ def read_prediction_file(filepath):
         return None
     return picks
 
+def calculate_scores(participant_picks, actual_results, points_per_round):
+    """Calculates total score and round-by-round scores for a participant."""
+    total_score = 0
+    round_scores = defaultdict(int)
+    for match_id, predicted_winner in participant_picks.items():
+        actual_winner = actual_results.get(match_id)
+        if actual_winner and predicted_winner == actual_winner:
+            round_key = match_id.split('-')[1]
+            points = points_per_round.get(round_key, 0)
+            total_score += points
+            round_scores[round_key] += points
+    return {"total": total_score, "rounds": dict(round_scores)}
+
+
 def create_viewer_data(predictions_dir, entrants_file):
-    """Reads all prediction files and the master file from a directory."""
+    """Reads all prediction files, calculates scores, and structures data."""
     master_filename = "actual_results_predictions.csv"
+    points_per_round = {'r32': 2, 'r16': 3, 'qf': 5, 'sf': 8, 'f': 13}
 
     mens_entrants, womens_entrants = parse_entrants(entrants_file)
     if mens_entrants is None:
@@ -113,15 +129,55 @@ def create_viewer_data(predictions_dir, entrants_file):
             player_name = filename.replace("_predictions.csv", "").replace("_", " ").title()
             picks = read_prediction_file(filepath)
             if picks:
+                score_info = calculate_scores(picks, viewer_data["actual_results"], points_per_round)
                 viewer_data["participants"].append({
                     "name": player_name,
-                    "picks": picks
+                    "picks": picks,
+                    "score": score_info["total"]
                 })
+
+    # Sort participants by score
+    viewer_data["participants"].sort(key=lambda p: p["score"], reverse=True)
 
     return viewer_data
 
+def generate_leaderboard_html(participants):
+    """Generates the HTML table for the leaderboard."""
+    if not participants:
+        return ""
+
+    table_rows = ""
+    for i, p in enumerate(participants):
+        table_rows += f"""
+        <tr>
+            <td>{i + 1}</td>
+            <td>{p['name']}</td>
+            <td>{p['score']}</td>
+        </tr>
+        """
+
+    return f"""
+    <div class="leaderboard-container">
+        <h3>Leaderboard</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Name</th>
+                    <th>Total Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+    </div>
+    """
+
 def generate_viewer_html(viewer_data, output_path):
     """Generates the master viewer HTML file with all data embedded."""
+
+    leaderboard_html = generate_leaderboard_html(viewer_data["participants"])
 
     html_template = f"""
 <!DOCTYPE html>
@@ -143,6 +199,35 @@ def generate_viewer_html(viewer_data, output_path):
         h1 {{ font-size: 2.5em; margin-bottom: 0.25em; }}
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
         h3 {{ font-size: 1.2em; margin-bottom: 1em; color: #4A0072; }}
+
+        .leaderboard-container {{
+            max-width: 600px;
+            margin: 2em auto;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        th, td {{
+            padding: 12px 15px;
+            text-align: left;
+        }}
+        thead tr {{
+            background-color: #4A0072;
+            color: #fff;
+            font-size: 1.1em;
+        }}
+        tbody tr:nth-of-type(even) {{
+            background-color: #f8f9fa;
+        }}
+        tbody tr {{
+            border-bottom: 1px solid #ddd;
+        }}
+        td:first-child {{ font-weight: bold; }}
 
         .tab-nav {{
             display: flex; justify-content: center; flex-wrap: wrap;
@@ -184,11 +269,12 @@ def generate_viewer_html(viewer_data, output_path):
         .champion-box {{ display: flex; flex-direction: column; align-items: center; justify-content: center; }}
         .champion-trophy {{ font-size: 4em; color: #d4af37; line-height: 1; }}
         .champion-name {{ font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-height: 30px; text-align: center; }}
-        #score-summary {{ margin-bottom: 1.5em; font-size: 1.2em; font-weight: bold; }}
     </style>
 </head>
 <body>
     <h1>Tournament Results Viewer</h1>
+    <h3>Scoring System: R32 (2pts), R16 (3pts), QF (5pts), SF (8pts), Final (13pts)</h3>
+    {leaderboard_html}
     <div id="tab-navigation" class="tab-nav"></div>
     <div id="tab-contents"></div>
 
@@ -196,14 +282,14 @@ def generate_viewer_html(viewer_data, output_path):
         const viewerData = {json.dumps(viewer_data, indent=4)};
 
         const rounds = [
-            {{ "name": "Round of 32", "key": "r32", "matches": 16 }},
-            {{ "name": "Round of 16", "key": "r16", "matches": 8 }},
-            {{ "name": "Quarterfinals", "key": "qf", "matches": 4 }},
-            {{ "name": "Semifinals", "key": "sf", "matches": 2 }},
-            {{ "name": "Final", "key": "f", "matches": 1 }}
+            {{ "name": "Round of 32", "key": "r32" }},
+            {{ "name": "Round of 16", "key": "r16" }},
+            {{ "name": "Quarterfinals", "key": "qf" }},
+            {{ "name": "Semifinals", "key": "sf" }},
+            {{ "name": "Final", "key": "f" }}
         ];
 
-        const pointsPerRound = {{'r32': 1, 'r16': 2, 'qf': 4, 'sf': 8, 'f': 16}};
+        const pointsPerRound = {{'r32': 2, 'r16': 3, 'qf': 5, 'sf': 8, 'f': 13}};
 
         function createBracketDisplay(container, category, participantPicks) {{
             container.innerHTML = '';
@@ -218,7 +304,8 @@ def generate_viewer_html(viewer_data, output_path):
                 const matchupWrapper = document.createElement('div');
                 matchupWrapper.classList.add('matchup-wrapper');
 
-                for (let i = 0; i < round.matches; i++) {{
+                const numMatches = 16 / Math.pow(2, roundIndex);
+                for (let i = 0; i < numMatches; i++) {{
                     const matchupId = `${{category}}-${{round.key}}-match-${{i}}`;
                     const matchupDiv = document.createElement('div');
                     matchupDiv.classList.add('matchup');
@@ -287,16 +374,13 @@ def generate_viewer_html(viewer_data, output_path):
 
         function calculateScores(participantPicks) {{
             let totalScore = 0;
-            const roundScores = {{}};
             for (const matchId in participantPicks) {{
                 if (viewerData.actual_results[matchId] && participantPicks[matchId] === viewerData.actual_results[matchId]) {{
                     const roundKey = matchId.split('-')[1];
-                    const points = pointsPerRound[roundKey] || 0;
-                    totalScore += points;
-                    roundScores[roundKey] = (roundScores[roundKey] || 0) + points;
+                    totalScore += pointsPerRound[roundKey] || 0;
                 }}
             }}
-            return {{ totalScore, roundScores }};
+            return totalScore;
         }}
 
         function openTab(event, tabId) {{
@@ -326,8 +410,7 @@ def generate_viewer_html(viewer_data, output_path):
                 tab.id = tabId;
                 tab.className = 'tab-content';
 
-                const scoreData = calculateScores(p.picks);
-                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${{scoreData.totalScore}} pts</h3>` : '';
+                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${{p.score}} pts</h3>` : '';
 
                 tab.innerHTML = scoreHtml + `
                     <h2>Men's Singles</h2><div id="${{nameKey}}-mens-bracket" class="bracket-container"></div>
@@ -355,13 +438,10 @@ def generate_viewer_html(viewer_data, output_path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate a master viewer HTML for tournament brackets.",
-        epilog="Example: python generate_viewer.py -b ./all_brackets -e ./entrants.txt"
-    )
+    parser = argparse.ArgumentParser(description="Generate a master viewer HTML for tournament brackets.")
     parser.add_argument(
         '-b', '--board',
-        required=True, # Flag is now mandatory
+        required=True,
         metavar='DIRECTORY',
         help="Directory containing all prediction files."
     )
@@ -377,7 +457,6 @@ if __name__ == "__main__":
     else:
         viewer_data = create_viewer_data(args.board, args.entrants)
         if viewer_data:
-            # UPDATED: Save the file as index.html inside the specified directory
             output_filename = "index.html"
             output_filepath = os.path.join(args.board, output_filename)
             generate_viewer_html(viewer_data, output_filepath)
