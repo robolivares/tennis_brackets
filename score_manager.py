@@ -9,7 +9,7 @@ from collections import defaultdict
 #    'r32': 1, 'r16': 2, 'qf': 4, 'sf': 8, 'f': 16
 #}
 POINTS_PER_ROUND = {
-    'r32': 2, 'r16': 3, 'qf': 5, 'sf': 8, 'f': 13
+    'r128':1, 'r64':1, 'r32': 2, 'r16': 3, 'qf': 5, 'sf': 8, 'f': 13
 }
 ROUND_NAMES = {
     'r32': 'Round of 32', 'r16': 'Round of 16', 'qf': 'Quarterfinals',

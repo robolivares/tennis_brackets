@@ -52,8 +52,9 @@ This is a one-time setup you do at the start of each tournament.
 
 3.  **Distribute the Bracket:**
     * Send the newly created `bracket.html` file to all your friends who are participating.
+    * **Note:** It is highly recommended that participants fill out the bracket on a laptop or desktop computer. The wide format is not optimized for mobile phones.
 
-#### **NEW: Running Multiple Sweepstakes (Changing the Google Form)**
+#### **Running Multiple Sweepstakes (Changing the Google Form)**
 
 If you want to run a new sweepstakes for a different tournament, you must link the system to a new Google Form to keep the results separate.
 
@@ -80,7 +81,7 @@ If you want to run a new sweepstakes for a different tournament, you must link t
 ### Step 2: Collecting Predictions (Participants & Administrator)
 
 1.  **Participants Fill Out Bracket:**
-    * Each friend opens the `bracket.html` file in their web browser (Chrome or Safari are recommended).
+    * Each friend opens the `bracket.html` file in their web browser.
     * They click through the rounds to select their predicted winner for every match.
     * Once the bracket is complete, they click the **"Lock In & Review Bracket"** button.
     * They will be prompted to enter their name.
@@ -135,6 +136,4 @@ This is the final step, where you create the shared dashboard for everyone to se
 
 3.  **Updating the Viewer:**
     * To update the scores after a new round, simply update your `actual_results_predictions.csv` file, re-run the `generate_viewer.py` script, and re-upload the `all_brackets` folder to Netlify. The link will remain the same.
-
-
 
