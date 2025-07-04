@@ -230,13 +230,17 @@ def generate_viewer_html(viewer_data, output_path):
         td:first-child {{ font-weight: bold; }}
 
         .tab-nav {{
-            display: flex; justify-content: center; flex-wrap: wrap;
-            gap: 10px; margin-bottom: 2em; border-bottom: 2px solid #ddd; padding-bottom: 1em;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin: 2em auto;
+            max-width: 1200px;
         }}
         .tab-button {{
             padding: 0.8em 1.5em; font-size: 1em; font-weight: bold;
             border: 2px solid #4A0072; background-color: #fff; color: #4A0072;
             border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s;
+            text-align: center;
         }}
         .tab-button:hover {{ background-color: #f0e6f6; }}
         .tab-button.active {{ background-color: #4A0072; color: #fff; }}
@@ -277,6 +281,7 @@ def generate_viewer_html(viewer_data, output_path):
     {leaderboard_html}
     <div id="tab-navigation" class="tab-nav"></div>
     <div id="tab-contents"></div>
+    <div id="tab-navigation-bottom" class="tab-nav" style="margin-top: 2em; border-top: 2px solid #ddd; padding-top: 1em;"></div>
 
     <script>
         const viewerData = {json.dumps(viewer_data, indent=4)};
@@ -372,29 +377,19 @@ def generate_viewer_html(viewer_data, output_path):
             container.appendChild(championContainer);
         }}
 
-        function calculateScores(participantPicks) {{
-            let totalScore = 0;
-            for (const matchId in participantPicks) {{
-                if (viewerData.actual_results[matchId] && participantPicks[matchId] === viewerData.actual_results[matchId]) {{
-                    const roundKey = matchId.split('-')[1];
-                    totalScore += pointsPerRound[roundKey] || 0;
-                }}
-            }}
-            return totalScore;
-        }}
-
-        function openTab(event, tabId) {{
+        function openTab(tabId) {{
             document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+
             document.getElementById(tabId).style.display = 'block';
-            event.currentTarget.classList.add('active');
+            document.querySelectorAll(`[data-tab-id="${{tabId}}"]`).forEach(b => b.classList.add('active'));
         }}
 
         function setupViewer() {{
             const navContainer = document.getElementById('tab-navigation');
             const contentContainer = document.getElementById('tab-contents');
 
-            const allParticipants = [{{"name": "Actual Results", "picks": viewerData.actual_results}}, ...viewerData.participants];
+            const allParticipants = [{{"name": "Actual Results", "picks": viewerData.actual_results, "score": null}}, ...viewerData.participants];
 
             allParticipants.forEach((p, index) => {{
                 const nameKey = p.name.replace(/\\s+/g, '-');
@@ -403,7 +398,8 @@ def generate_viewer_html(viewer_data, output_path):
                 const btn = document.createElement('button');
                 btn.className = 'tab-button';
                 btn.textContent = p.name;
-                btn.onclick = (e) => openTab(e, tabId);
+                btn.dataset.tabId = tabId; // Add data attribute for syncing
+                btn.onclick = () => openTab(tabId);
                 navContainer.appendChild(btn);
 
                 const tab = document.createElement('div');
@@ -424,6 +420,15 @@ def generate_viewer_html(viewer_data, output_path):
                     btn.classList.add('active');
                     tab.style.display = 'block';
                 }}
+            }});
+
+            // Duplicate the navigation to the bottom
+            const bottomNavContainer = document.getElementById('tab-navigation-bottom');
+            bottomNavContainer.innerHTML = navContainer.innerHTML;
+            // Re-attach event listeners for the bottom buttons
+            bottomNavContainer.querySelectorAll('.tab-button').forEach(btn => {{
+                const tabId = btn.dataset.tabId;
+                btn.onclick = () => openTab(tabId);
             }});
         }}
 
