@@ -148,8 +148,10 @@ def generate_leaderboard_html(participants):
 
     table_rows = ""
     for i, p in enumerate(participants):
+        name_key = p['name'].replace(' ', '-')
+        tab_id = f"{name_key}-tab"
         table_rows += f"""
-        <tr>
+        <tr onclick="goToTab('{tab_id}')" style="cursor: pointer;">
             <td>{i + 1}</td>
             <td>{p['name']}</td>
             <td>{p['score']}</td>
@@ -226,6 +228,9 @@ def generate_viewer_html(viewer_data, output_path):
         }}
         tbody tr {{
             border-bottom: 1px solid #ddd;
+        }}
+        tbody tr:hover {{
+            background-color: #f0e6f6;
         }}
         td:first-child {{ font-weight: bold; }}
 
@@ -377,6 +382,14 @@ def generate_viewer_html(viewer_data, output_path):
             container.appendChild(championContainer);
         }}
 
+        function goToTab(tabId) {{
+            const button = document.querySelector(`.tab-button[data-tab-id='${{tabId}}']`);
+            if (button) {{
+                openTab(tabId);
+                button.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+            }}
+        }}
+
         function openTab(tabId) {{
             document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
@@ -398,7 +411,7 @@ def generate_viewer_html(viewer_data, output_path):
                 const btn = document.createElement('button');
                 btn.className = 'tab-button';
                 btn.textContent = p.name;
-                btn.dataset.tabId = tabId; // Add data attribute for syncing
+                btn.dataset.tabId = tabId;
                 btn.onclick = () => openTab(tabId);
                 navContainer.appendChild(btn);
 
@@ -422,10 +435,8 @@ def generate_viewer_html(viewer_data, output_path):
                 }}
             }});
 
-            // Duplicate the navigation to the bottom
             const bottomNavContainer = document.getElementById('tab-navigation-bottom');
             bottomNavContainer.innerHTML = navContainer.innerHTML;
-            // Re-attach event listeners for the bottom buttons
             bottomNavContainer.querySelectorAll('.tab-button').forEach(btn => {{
                 const tabId = btn.dataset.tabId;
                 btn.onclick = () => openTab(tabId);
