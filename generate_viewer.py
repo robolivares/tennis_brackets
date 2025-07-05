@@ -77,7 +77,6 @@ def read_prediction_file(filepath):
                     continue
 
                 if len(row) != 4:
-                    print(f"Warning: Skipping malformed row #{i+2} in {os.path.basename(filepath)}: {row}")
                     continue
 
                 _, _, match_id, predicted_winner = row
@@ -90,52 +89,44 @@ def read_prediction_file(filepath):
 
 def get_active_players(initial_entrants, actual_results, debug=False):
     """Determines which players are still in the tournament."""
-    all_players = set()
+    all_players_in_draw = set()
     for category in ['mens', 'womens']:
         for matchup in initial_entrants[category]:
-            all_players.add(matchup[0][1])
-            all_players.add(matchup[1][1])
+            all_players_in_draw.add(matchup[0][1])
+            all_players_in_draw.add(matchup[1][1])
 
-    eliminated = set()
     actual_matchups = {}
-
-    if debug: print("\n--- DEBUG: Building Actual Matchups Map ---")
     for category in ['mens', 'womens']:
         for round_index, round_info in enumerate(ROUNDS):
             num_matches = 16 // (2**round_index)
             for match_idx in range(num_matches):
                 match_id = f"{category}-{round_info['key']}-match-{match_idx}"
-                p1, p2 = None, None
-                if round_index == 0:
-                    entrants_list = initial_entrants[category]
-                    if match_idx < len(entrants_list):
-                        p1 = entrants_list[match_idx][0][1]
-                        p2 = entrants_list[match_idx][1][1]
-                else:
-                    prev_round_key = ROUNDS[round_index - 1]['key']
-                    p1_match_id = f"{category}-{prev_round_key}-match-{match_idx * 2}"
-                    p2_match_id = f"{category}-{prev_round_key}-match-{match_idx * 2 + 1}"
-                    p1 = actual_results.get(p1_match_id)
-                    p2 = actual_results.get(p2_match_id)
+                if match_id in actual_results:
+                    p1, p2 = None, None
+                    if round_index == 0:
+                        entrants_list = initial_entrants[category]
+                        if match_idx < len(entrants_list):
+                            p1 = entrants_list[match_idx][0][1]
+                            p2 = entrants_list[match_idx][1][1]
+                    else:
+                        prev_round_key = ROUNDS[round_index - 1]['key']
+                        p1_match_id = f"{category}-{prev_round_key}-match-{match_idx * 2}"
+                        p2_match_id = f"{category}-{prev_round_key}-match-{match_idx * 2 + 1}"
+                        p1 = actual_results.get(p1_match_id)
+                        p2 = actual_results.get(p2_match_id)
 
-                if p1 and p2:
-                    actual_matchups[match_id] = (p1, p2)
-                    if debug: print(f"  Mapping {match_id}: {p1} vs {p2}")
+                    if p1 and p2:
+                        actual_matchups[match_id] = (p1, p2)
 
-    if debug: print("\n--- DEBUG: Determining Eliminated Players ---")
-    for match_id, winner in actual_results.items():
-        if match_id in actual_matchups:
-            p1, p2 = actual_matchups[match_id]
-            loser = p2 if winner == p1 else p1
-            eliminated.add(loser)
-            if debug: print(f"  Match {match_id}: {winner} def. {loser}. Adding {loser} to eliminated set.")
+    players_who_played = set()
+    for p1, p2 in actual_matchups.values():
+        players_who_played.add(p1)
+        players_who_played.add(p2)
 
-    active = all_players - eliminated
-    if debug:
-        print("\n--- DEBUG: Final Active Players List ---")
-        print(sorted(list(active)))
-        print("-----------------------------------------")
-    return active
+    winners = set(actual_results.values())
+    eliminated = players_who_played - winners
+
+    return all_players_in_draw - eliminated
 
 def calculate_scores(picks, actual_results, points_per_round):
     """Calculates the current score for a set of picks."""
@@ -146,28 +137,14 @@ def calculate_scores(picks, actual_results, points_per_round):
             current_score += points_per_round.get(round_key, 0)
     return current_score
 
-def calculate_max_score(picks, current_score, active_players, points_per_round, actual_results, debug=False):
+def calculate_max_score(picks, current_score, active_players, points_per_round, actual_results):
     """Calculates the maximum possible score for a set of picks."""
     potential_points = 0
-    if debug: print(f"\n--- Calculating Max Score (Starting with Current Score: {current_score}) ---")
-
-    for match_id, predicted_winner in sorted(picks.items()):
+    for match_id, predicted_winner in picks.items():
         if match_id not in actual_results:
-            is_alive = predicted_winner in active_players
-            round_key = match_id.split('-')[1]
-            points = points_per_round.get(round_key, 0)
-
-            if debug:
-                status = "ALIVE" if is_alive else "ELIMINATED"
-                print(f"  - Checking future match '{match_id}': Pick = {predicted_winner} ({status})")
-
-            if is_alive:
-                potential_points += points
-                if debug: print(f"    > Player is active. Adding {points} potential points.")
-            elif debug:
-                print(f"    > Player is eliminated. No points added.")
-
-    if debug: print(f"  >>> Final Calculation: {current_score} (current) + {potential_points} (potential)")
+            if predicted_winner in active_players:
+                round_key = match_id.split('-')[1]
+                potential_points += points_per_round.get(round_key, 0)
     return current_score + potential_points
 
 def create_viewer_data(predictions_dir, entrants_file, debug=False):
@@ -207,11 +184,8 @@ def create_viewer_data(predictions_dir, entrants_file, debug=False):
             player_name = filename.replace("_predictions.csv", "").replace("_", " ").title()
             picks = read_prediction_file(filepath)
             if picks:
-                if debug: print(f"\n--- Processing: {player_name} ---")
                 current_score = calculate_scores(picks, viewer_data["actual_results"], points_per_round)
-                if debug: print(f"  Current Score: {current_score}")
-                max_score = calculate_max_score(picks, current_score, active_players, points_per_round, viewer_data["actual_results"], debug)
-                if debug: print(f"  >>> Final Max Score for {player_name}: {max_score}")
+                max_score = calculate_max_score(picks, current_score, active_players, points_per_round, viewer_data["actual_results"])
 
                 viewer_data["participants"].append({
                     "name": player_name,
@@ -221,24 +195,14 @@ def create_viewer_data(predictions_dir, entrants_file, debug=False):
                 })
 
     viewer_data["participants"].sort(key=lambda p: p["score"], reverse=True)
+    for i, p in enumerate(viewer_data["participants"]):
+        p['rank'] = i + 1
+
     return viewer_data
 
 def generate_leaderboard_html(participants):
     """Generates the HTML table for the leaderboard."""
     if not participants: return ""
-
-    table_rows = ""
-    for i, p in enumerate(participants):
-        name_key = p['name'].replace(' ', '-')
-        tab_id = f"{name_key}-tab"
-        table_rows += f"""
-        <tr onclick="goToTab('{tab_id}')" style="cursor: pointer;">
-            <td>{i + 1}</td>
-            <td>{p['name']}</td>
-            <td>{p['score']}</td>
-            <td>{p['max_score']}</td>
-        </tr>
-        """
 
     return f"""
     <div class="leaderboard-container">
@@ -248,12 +212,11 @@ def generate_leaderboard_html(participants):
                 <tr>
                     <th>Rank</th>
                     <th>Name</th>
-                    <th>Current Score</th>
-                    <th>Max Possible</th>
+                    <th onclick="sortTable('score')" style="cursor: pointer;">Current Score &#x2195;</th>
+                    <th onclick="sortTable('max_score')" style="cursor: pointer;">Max Possible &#x2195;</th>
                 </tr>
             </thead>
-            <tbody>
-                {table_rows}
+            <tbody id="leaderboard-body">
             </tbody>
         </table>
     </div>
@@ -289,6 +252,7 @@ def generate_viewer_html(viewer_data, output_path):
         table {{ width: 100%; border-collapse: collapse; background-color: #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }}
         th, td {{ padding: 12px 15px; text-align: left; }}
         thead tr {{ background-color: #4A0072; color: #fff; font-size: 1.1em; }}
+        thead th {{ cursor: pointer; white-space: nowrap; }}
         tbody tr:nth-of-type(even) {{ background-color: #f8f9fa; }}
         tbody tr {{ border-bottom: 1px solid #ddd; }}
         tbody tr:hover {{ background-color: #f0e6f6; }}
@@ -442,9 +406,35 @@ def generate_viewer_html(viewer_data, output_path):
             document.querySelectorAll(`[data-tab-id="${{tabId}}"]`).forEach(b => b.classList.add('active'));
         }}
 
+        function sortTable(sortBy) {{
+            const sortedParticipants = [...viewerData.participants].sort((a, b) => b[sortBy] - a[sortBy]);
+            renderLeaderboard(sortedParticipants);
+        }}
+
+        function renderLeaderboard(participants) {{
+            const tbody = document.getElementById('leaderboard-body');
+            tbody.innerHTML = '';
+            participants.forEach(p => {{
+                const nameKey = p.name.replace(/\\s+/g, '-');
+                const tabId = `${{nameKey}}-tab`;
+                const row = document.createElement('tr');
+                row.style.cursor = 'pointer';
+                row.onclick = () => goToTab(tabId);
+                row.innerHTML = `
+                    <td>${{p.rank}}</td>
+                    <td>${{p.name}}</td>
+                    <td>${{p.score}}</td>
+                    <td>${{p.max_score}}</td>
+                `;
+                tbody.appendChild(row);
+            }});
+        }}
+
         function setupViewer() {{
             const navContainer = document.getElementById('tab-navigation');
             const contentContainer = document.getElementById('tab-contents');
+
+            renderLeaderboard(viewerData.participants);
 
             const allParticipants = [{{"name": "Actual Results", "picks": viewerData.actual_results, "score": null}}, ...viewerData.participants];
 
