@@ -5,13 +5,20 @@ import argparse
 import re
 from collections import defaultdict
 
+# Define ROUNDS globally so it's accessible to all functions
+ROUNDS = [
+    { "name": "Round of 32", "key": "r32" }, { "name": "Round of 16", "key": "r16" },
+    { "name": "Quarterfinals", "key": "qf" }, { "name": "Semifinals", "key": "sf" },
+    { "name": "Final", "key": "f" }
+]
+
 def parse_entrants(filepath="entrants.txt"):
     """
     Parses the entrants.txt file to get initial matchups, including seeding.
     This is needed to know the original R32 matchups.
     """
     if not os.path.exists(filepath):
-        print(f"Error: entrants.txt not found. It's needed to build the viewer.")
+        print(f"Error: {filepath} not found. It's needed to build the viewer.")
         return None, None
 
     mens_matchups = []
@@ -81,21 +88,89 @@ def read_prediction_file(filepath):
         return None
     return picks
 
-def calculate_scores(participant_picks, actual_results, points_per_round):
-    """Calculates total score and round-by-round scores for a participant."""
-    total_score = 0
-    round_scores = defaultdict(int)
-    for match_id, predicted_winner in participant_picks.items():
-        actual_winner = actual_results.get(match_id)
-        if actual_winner and predicted_winner == actual_winner:
+def get_active_players(initial_entrants, actual_results, debug=False):
+    """Determines which players are still in the tournament."""
+    all_players = set()
+    for category in ['mens', 'womens']:
+        for matchup in initial_entrants[category]:
+            all_players.add(matchup[0][1])
+            all_players.add(matchup[1][1])
+
+    eliminated = set()
+    actual_matchups = {}
+
+    if debug: print("\n--- DEBUG: Building Actual Matchups Map ---")
+    for category in ['mens', 'womens']:
+        for round_index, round_info in enumerate(ROUNDS):
+            num_matches = 16 // (2**round_index)
+            for match_idx in range(num_matches):
+                match_id = f"{category}-{round_info['key']}-match-{match_idx}"
+                p1, p2 = None, None
+                if round_index == 0:
+                    entrants_list = initial_entrants[category]
+                    if match_idx < len(entrants_list):
+                        p1 = entrants_list[match_idx][0][1]
+                        p2 = entrants_list[match_idx][1][1]
+                else:
+                    prev_round_key = ROUNDS[round_index - 1]['key']
+                    p1_match_id = f"{category}-{prev_round_key}-match-{match_idx * 2}"
+                    p2_match_id = f"{category}-{prev_round_key}-match-{match_idx * 2 + 1}"
+                    p1 = actual_results.get(p1_match_id)
+                    p2 = actual_results.get(p2_match_id)
+
+                if p1 and p2:
+                    actual_matchups[match_id] = (p1, p2)
+                    if debug: print(f"  Mapping {match_id}: {p1} vs {p2}")
+
+    if debug: print("\n--- DEBUG: Determining Eliminated Players ---")
+    for match_id, winner in actual_results.items():
+        if match_id in actual_matchups:
+            p1, p2 = actual_matchups[match_id]
+            loser = p2 if winner == p1 else p1
+            eliminated.add(loser)
+            if debug: print(f"  Match {match_id}: {winner} def. {loser}. Adding {loser} to eliminated set.")
+
+    active = all_players - eliminated
+    if debug:
+        print("\n--- DEBUG: Final Active Players List ---")
+        print(sorted(list(active)))
+        print("-----------------------------------------")
+    return active
+
+def calculate_scores(picks, actual_results, points_per_round):
+    """Calculates the current score for a set of picks."""
+    current_score = 0
+    for match_id, predicted_winner in picks.items():
+        if match_id in actual_results and predicted_winner == actual_results.get(match_id):
+            round_key = match_id.split('-')[1]
+            current_score += points_per_round.get(round_key, 0)
+    return current_score
+
+def calculate_max_score(picks, current_score, active_players, points_per_round, actual_results, debug=False):
+    """Calculates the maximum possible score for a set of picks."""
+    potential_points = 0
+    if debug: print(f"\n--- Calculating Max Score (Starting with Current Score: {current_score}) ---")
+
+    for match_id, predicted_winner in sorted(picks.items()):
+        if match_id not in actual_results:
+            is_alive = predicted_winner in active_players
             round_key = match_id.split('-')[1]
             points = points_per_round.get(round_key, 0)
-            total_score += points
-            round_scores[round_key] += points
-    return {"total": total_score, "rounds": dict(round_scores)}
 
+            if debug:
+                status = "ALIVE" if is_alive else "ELIMINATED"
+                print(f"  - Checking future match '{match_id}': Pick = {predicted_winner} ({status})")
 
-def create_viewer_data(predictions_dir, entrants_file):
+            if is_alive:
+                potential_points += points
+                if debug: print(f"    > Player is active. Adding {points} potential points.")
+            elif debug:
+                print(f"    > Player is eliminated. No points added.")
+
+    if debug: print(f"  >>> Final Calculation: {current_score} (current) + {potential_points} (potential)")
+    return current_score + potential_points
+
+def create_viewer_data(predictions_dir, entrants_file, debug=False):
     """Reads all prediction files, calculates scores, and structures data."""
     master_filename = "actual_results_predictions.csv"
     points_per_round = {'r32': 2, 'r16': 3, 'qf': 5, 'sf': 8, 'f': 13}
@@ -104,11 +179,12 @@ def create_viewer_data(predictions_dir, entrants_file):
     if mens_entrants is None:
         return None
 
+    initial_entrants = {"mens": mens_entrants, "womens": womens_entrants}
     mens_seed_map = {name: seed for seed, name in [player for matchup in mens_entrants for player in matchup]}
     womens_seed_map = {name: seed for seed, name in [player for matchup in womens_entrants for player in matchup]}
 
     viewer_data = {
-        "initial_entrants": { "mens": mens_entrants, "womens": womens_entrants },
+        "initial_entrants": initial_entrants,
         "seed_map": { "mens": mens_seed_map, "womens": womens_seed_map },
         "actual_results": None,
         "participants": []
@@ -123,28 +199,33 @@ def create_viewer_data(predictions_dir, entrants_file):
     if viewer_data["actual_results"] is None:
         return None
 
+    active_players = get_active_players(initial_entrants, viewer_data["actual_results"], debug)
+
     for filename in sorted(os.listdir(predictions_dir)):
         if filename.endswith("_predictions.csv") and filename != master_filename:
             filepath = os.path.join(predictions_dir, filename)
             player_name = filename.replace("_predictions.csv", "").replace("_", " ").title()
             picks = read_prediction_file(filepath)
             if picks:
-                score_info = calculate_scores(picks, viewer_data["actual_results"], points_per_round)
+                if debug: print(f"\n--- Processing: {player_name} ---")
+                current_score = calculate_scores(picks, viewer_data["actual_results"], points_per_round)
+                if debug: print(f"  Current Score: {current_score}")
+                max_score = calculate_max_score(picks, current_score, active_players, points_per_round, viewer_data["actual_results"], debug)
+                if debug: print(f"  >>> Final Max Score for {player_name}: {max_score}")
+
                 viewer_data["participants"].append({
                     "name": player_name,
                     "picks": picks,
-                    "score": score_info["total"]
+                    "score": current_score,
+                    "max_score": max_score
                 })
 
-    # Sort participants by score
     viewer_data["participants"].sort(key=lambda p: p["score"], reverse=True)
-
     return viewer_data
 
 def generate_leaderboard_html(participants):
     """Generates the HTML table for the leaderboard."""
-    if not participants:
-        return ""
+    if not participants: return ""
 
     table_rows = ""
     for i, p in enumerate(participants):
@@ -155,6 +236,7 @@ def generate_leaderboard_html(participants):
             <td>{i + 1}</td>
             <td>{p['name']}</td>
             <td>{p['score']}</td>
+            <td>{p['max_score']}</td>
         </tr>
         """
 
@@ -166,7 +248,8 @@ def generate_leaderboard_html(participants):
                 <tr>
                     <th>Rank</th>
                     <th>Name</th>
-                    <th>Total Score</th>
+                    <th>Current Score</th>
+                    <th>Max Possible</th>
                 </tr>
             </thead>
             <tbody>
@@ -202,51 +285,17 @@ def generate_viewer_html(viewer_data, output_path):
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
         h3 {{ font-size: 1.2em; margin-bottom: 1em; color: #4A0072; }}
 
-        .leaderboard-container {{
-            max-width: 600px;
-            margin: 2em auto;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            background-color: #fff;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            overflow: hidden;
-        }}
-        th, td {{
-            padding: 12px 15px;
-            text-align: left;
-        }}
-        thead tr {{
-            background-color: #4A0072;
-            color: #fff;
-            font-size: 1.1em;
-        }}
-        tbody tr:nth-of-type(even) {{
-            background-color: #f8f9fa;
-        }}
-        tbody tr {{
-            border-bottom: 1px solid #ddd;
-        }}
-        tbody tr:hover {{
-            background-color: #f0e6f6;
-        }}
+        .leaderboard-container {{ max-width: 600px; margin: 2em auto; }}
+        table {{ width: 100%; border-collapse: collapse; background-color: #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }}
+        th, td {{ padding: 12px 15px; text-align: left; }}
+        thead tr {{ background-color: #4A0072; color: #fff; font-size: 1.1em; }}
+        tbody tr:nth-of-type(even) {{ background-color: #f8f9fa; }}
+        tbody tr {{ border-bottom: 1px solid #ddd; }}
+        tbody tr:hover {{ background-color: #f0e6f6; }}
         td:first-child {{ font-weight: bold; }}
 
-        .tab-nav {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
-            margin: 2em auto;
-            max-width: 1200px;
-        }}
-        .tab-button {{
-            padding: 0.8em 1.5em; font-size: 1em; font-weight: bold;
-            border: 2px solid #4A0072; background-color: #fff; color: #4A0072;
-            border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s;
-            text-align: center;
-        }}
+        .tab-nav {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 2em auto; max-width: 1200px; }}
+        .tab-button {{ padding: 0.8em 1.5em; font-size: 1em; font-weight: bold; border: 2px solid #4A0072; background-color: #fff; color: #4A0072; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s; text-align: center; }}
         .tab-button:hover {{ background-color: #f0e6f6; }}
         .tab-button.active {{ background-color: #4A0072; color: #fff; }}
 
@@ -258,10 +307,7 @@ def generate_viewer_html(viewer_data, output_path):
         .round-title {{ font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; }}
         .matchup-wrapper {{ display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; }}
 
-        .matchup {{
-            background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            width: 270px; position: relative;
-        }}
+        .matchup {{ background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 270px; position: relative; }}
         .matchup-wrapper > .matchup:not(:last-child) {{ margin-bottom: 28px; }}
 
         .player {{ display: flex; align-items: center; margin: 8px 0; border-radius: 5px; }}
@@ -291,7 +337,7 @@ def generate_viewer_html(viewer_data, output_path):
     <script>
         const viewerData = {json.dumps(viewer_data, indent=4)};
 
-        const rounds = [
+        const ROUNDS = [
             {{ "name": "Round of 32", "key": "r32" }},
             {{ "name": "Round of 16", "key": "r16" }},
             {{ "name": "Quarterfinals", "key": "qf" }},
@@ -299,12 +345,10 @@ def generate_viewer_html(viewer_data, output_path):
             {{ "name": "Final", "key": "f" }}
         ];
 
-        const pointsPerRound = {{'r32': 2, 'r16': 3, 'qf': 5, 'sf': 8, 'f': 13}};
-
         function createBracketDisplay(container, category, participantPicks) {{
             container.innerHTML = '';
 
-            rounds.forEach((round, roundIndex) => {{
+            ROUNDS.forEach((round, roundIndex) => {{
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
                 const roundTitle = document.createElement('div');
@@ -326,7 +370,7 @@ def generate_viewer_html(viewer_data, output_path):
                         player1 = viewerData.initial_entrants[category][i][0];
                         player2 = viewerData.initial_entrants[category][i][1];
                     }} else {{
-                        const prevRoundKey = rounds[roundIndex - 1].key;
+                        const prevRoundKey = ROUNDS[roundIndex - 1].key;
                         const p1MatchupId = `${{category}}-${{prevRoundKey}}-match-${{i * 2}}`;
                         const p2MatchupId = `${{category}}-${{prevRoundKey}}-match-${{i * 2 + 1}}`;
 
@@ -419,7 +463,7 @@ def generate_viewer_html(viewer_data, output_path):
                 tab.id = tabId;
                 tab.className = 'tab-content';
 
-                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${{p.score}} pts</h3>` : '';
+                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${{p.score}} pts | Max Possible: ${{p.max_score}} pts</h3>` : '';
 
                 tab.innerHTML = scoreHtml + `
                     <h2>Men's Singles</h2><div id="${{nameKey}}-mens-bracket" class="bracket-container"></div>
@@ -466,12 +510,17 @@ if __name__ == "__main__":
         default='entrants.txt',
         help="Path to the entrants.txt file (default: entrants.txt)."
     )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help="Enable debug printing to the console."
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.board):
         print(f"Error: Directory '{args.board}' not found.")
     else:
-        viewer_data = create_viewer_data(args.board, args.entrants)
+        viewer_data = create_viewer_data(args.board, args.entrants, args.debug)
         if viewer_data:
             output_filename = "index.html"
             output_filepath = os.path.join(args.board, output_filename)

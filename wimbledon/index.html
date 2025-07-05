@@ -1,0 +1,2714 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Bracket Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 2em;
+            background-color: #f0f4f7; color: #333;
+        }
+        h1, h2, h3 { text-align: center; color: #005A31; }
+        h1 { font-size: 2.5em; margin-bottom: 0.25em; }
+        h2 { font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }
+        h3 { font-size: 1.2em; margin-bottom: 1em; color: #4A0072; }
+
+        .leaderboard-container { max-width: 600px; margin: 2em auto; }
+        table { width: 100%; border-collapse: collapse; background-color: #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px 15px; text-align: left; }
+        thead tr { background-color: #4A0072; color: #fff; font-size: 1.1em; }
+        tbody tr:nth-of-type(even) { background-color: #f8f9fa; }
+        tbody tr { border-bottom: 1px solid #ddd; }
+        tbody tr:hover { background-color: #f0e6f6; }
+        td:first-child { font-weight: bold; }
+
+        .tab-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 2em auto; max-width: 1200px; }
+        .tab-button { padding: 0.8em 1.5em; font-size: 1em; font-weight: bold; border: 2px solid #4A0072; background-color: #fff; color: #4A0072; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s; text-align: center; }
+        .tab-button:hover { background-color: #f0e6f6; }
+        .tab-button.active { background-color: #4A0072; color: #fff; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .bracket-container { display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
+        .round { display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }
+        .round-title { font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; }
+        .matchup-wrapper { display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; }
+
+        .matchup { background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 270px; position: relative; }
+        .matchup-wrapper > .matchup:not(:last-child) { margin-bottom: 28px; }
+
+        .player { display: flex; align-items: center; margin: 8px 0; border-radius: 5px; }
+        .player-seed { font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }
+        .player-name { flex-grow: 1; font-size: 1em; color: #333; }
+        .player-name.winner { font-weight: bold; color: #005A31; }
+        .tbd { font-style: italic; color: #999; }
+
+        .player-name.correct-pick { background-color: #d4edda; border-radius: 3px; padding: 2px 4px; }
+        .player-name.incorrect-pick { background-color: #f8d7da; text-decoration: line-through; border-radius: 3px; padding: 2px 4px; }
+        .actual-winner-note { font-size: 0.8em; color: #005A31; margin-left: 5px; padding-top: 5px; }
+
+        .champion-container { display: flex; align-items: center; justify-content: center; }
+        .champion-box { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .champion-trophy { font-size: 4em; color: #d4af37; line-height: 1; }
+        .champion-name { font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-height: 30px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>Tournament Results Viewer</h1>
+    <h3>Scoring System: R32 (2pts), R16 (3pts), QF (5pts), SF (8pts), Final (13pts)</h3>
+    
+    <div class="leaderboard-container">
+        <h3>Leaderboard</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Name</th>
+                    <th>Current Score</th>
+                    <th>Max Possible</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr onclick="goToTab('Jose-Calderon-tab')" style="cursor: pointer;">
+            <td>1</td>
+            <td>Jose Calderon</td>
+            <td>26</td>
+            <td>201</td>
+        </tr>
+        
+        <tr onclick="goToTab('Spasebo-Elena-tab')" style="cursor: pointer;">
+            <td>2</td>
+            <td>Spasebo Elena</td>
+            <td>24</td>
+            <td>191</td>
+        </tr>
+        
+        <tr onclick="goToTab('Arjun-tab')" style="cursor: pointer;">
+            <td>3</td>
+            <td>Arjun</td>
+            <td>22</td>
+            <td>186</td>
+        </tr>
+        
+        <tr onclick="goToTab('Jason-tab')" style="cursor: pointer;">
+            <td>4</td>
+            <td>Jason</td>
+            <td>22</td>
+            <td>194</td>
+        </tr>
+        
+        <tr onclick="goToTab('Michael-Nathe-The-Champ-tab')" style="cursor: pointer;">
+            <td>5</td>
+            <td>Michael Nathe The Champ</td>
+            <td>22</td>
+            <td>194</td>
+        </tr>
+        
+        <tr onclick="goToTab('Rob-tab')" style="cursor: pointer;">
+            <td>6</td>
+            <td>Rob</td>
+            <td>22</td>
+            <td>170</td>
+        </tr>
+        
+        <tr onclick="goToTab('Spyq-tab')" style="cursor: pointer;">
+            <td>7</td>
+            <td>Spyq</td>
+            <td>22</td>
+            <td>191</td>
+        </tr>
+        
+        <tr onclick="goToTab('Tomas-Clairvoyant-Perez-tab')" style="cursor: pointer;">
+            <td>8</td>
+            <td>Tomas Clairvoyant Perez</td>
+            <td>22</td>
+            <td>194</td>
+        </tr>
+        
+        <tr onclick="goToTab('Alex-Winslow-tab')" style="cursor: pointer;">
+            <td>9</td>
+            <td>Alex Winslow</td>
+            <td>20</td>
+            <td>163</td>
+        </tr>
+        
+        <tr onclick="goToTab('Brandon-Lay-tab')" style="cursor: pointer;">
+            <td>10</td>
+            <td>Brandon Lay</td>
+            <td>20</td>
+            <td>192</td>
+        </tr>
+        
+        <tr onclick="goToTab('Chad-Martin-tab')" style="cursor: pointer;">
+            <td>11</td>
+            <td>Chad Martin</td>
+            <td>20</td>
+            <td>181</td>
+        </tr>
+        
+        <tr onclick="goToTab('Diego-tab')" style="cursor: pointer;">
+            <td>12</td>
+            <td>Diego</td>
+            <td>20</td>
+            <td>171</td>
+        </tr>
+        
+        <tr onclick="goToTab('Fernando-tab')" style="cursor: pointer;">
+            <td>13</td>
+            <td>Fernando</td>
+            <td>20</td>
+            <td>189</td>
+        </tr>
+        
+        <tr onclick="goToTab('Jordan-tab')" style="cursor: pointer;">
+            <td>14</td>
+            <td>Jordan</td>
+            <td>20</td>
+            <td>184</td>
+        </tr>
+        
+        <tr onclick="goToTab('Manny-Manito-tab')" style="cursor: pointer;">
+            <td>15</td>
+            <td>Manny Manito</td>
+            <td>20</td>
+            <td>176</td>
+        </tr>
+        
+        <tr onclick="goToTab('Matty-tab')" style="cursor: pointer;">
+            <td>16</td>
+            <td>Matty</td>
+            <td>20</td>
+            <td>187</td>
+        </tr>
+        
+        <tr onclick="goToTab('Peter-Sullivan-tab')" style="cursor: pointer;">
+            <td>17</td>
+            <td>Peter Sullivan</td>
+            <td>20</td>
+            <td>195</td>
+        </tr>
+        
+        <tr onclick="goToTab('Tao-tab')" style="cursor: pointer;">
+            <td>18</td>
+            <td>Tao</td>
+            <td>20</td>
+            <td>163</td>
+        </tr>
+        
+        <tr onclick="goToTab('Will-Edman-tab')" style="cursor: pointer;">
+            <td>19</td>
+            <td>Will Edman</td>
+            <td>20</td>
+            <td>158</td>
+        </tr>
+        
+        <tr onclick="goToTab('Alicia-tab')" style="cursor: pointer;">
+            <td>20</td>
+            <td>Alicia</td>
+            <td>18</td>
+            <td>177</td>
+        </tr>
+        
+        <tr onclick="goToTab('Eric-Hot-Picks-Smith-tab')" style="cursor: pointer;">
+            <td>21</td>
+            <td>Eric Hot Picks Smith</td>
+            <td>18</td>
+            <td>187</td>
+        </tr>
+        
+        <tr onclick="goToTab('Eric-Katerman-tab')" style="cursor: pointer;">
+            <td>22</td>
+            <td>Eric Katerman</td>
+            <td>18</td>
+            <td>187</td>
+        </tr>
+        
+        <tr onclick="goToTab('Liam-tab')" style="cursor: pointer;">
+            <td>23</td>
+            <td>Liam</td>
+            <td>18</td>
+            <td>184</td>
+        </tr>
+        
+        <tr onclick="goToTab('Marc-Rouda-tab')" style="cursor: pointer;">
+            <td>24</td>
+            <td>Marc Rouda</td>
+            <td>18</td>
+            <td>187</td>
+        </tr>
+        
+        <tr onclick="goToTab('Gary-tab')" style="cursor: pointer;">
+            <td>25</td>
+            <td>Gary</td>
+            <td>16</td>
+            <td>156</td>
+        </tr>
+        
+        <tr onclick="goToTab('Jay-tab')" style="cursor: pointer;">
+            <td>26</td>
+            <td>Jay</td>
+            <td>16</td>
+            <td>182</td>
+        </tr>
+        
+        <tr onclick="goToTab('Phil-tab')" style="cursor: pointer;">
+            <td>27</td>
+            <td>Phil</td>
+            <td>14</td>
+            <td>178</td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+    
+    <div id="tab-navigation" class="tab-nav"></div>
+    <div id="tab-contents"></div>
+    <div id="tab-navigation-bottom" class="tab-nav" style="margin-top: 2em; border-top: 2px solid #ddd; padding-top: 1em;"></div>
+
+    <script>
+        const viewerData = {
+    "initial_entrants": {
+        "mens": [
+            [
+                [
+                    "1",
+                    "Jannik Sinner"
+                ],
+                [
+                    "",
+                    "Pedro Martinez"
+                ]
+            ],
+            [
+                [
+                    "19",
+                    "Grigor Dimitrov"
+                ],
+                [
+                    "",
+                    "Sebastian Ofner"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Shelton/Hijikata"
+                ],
+                [
+                    "",
+                    "Fucsovics/Monfils"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Brandon Nakashima"
+                ],
+                [
+                    "",
+                    "Lorenzo Sonego"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Marin Cilic"
+                ],
+                [
+                    "",
+                    "Jaume Munar"
+                ]
+            ],
+            [
+                [
+                    "22",
+                    "Fabio Cobolli"
+                ],
+                [
+                    "15",
+                    "Jakub Mensik"
+                ]
+            ],
+            [
+                [
+                    "11",
+                    "Alex de Minaur"
+                ],
+                [
+                    "Q",
+                    "A. Holmgren"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Miomir Kecmanovic"
+                ],
+                [
+                    "6",
+                    "Novak Djokovic"
+                ]
+            ],
+            [
+                [
+                    "5",
+                    "Taylor Fritz"
+                ],
+                [
+                    "",
+                    "A. Davidovich Fokina"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Luciano Darderi"
+                ],
+                [
+                    "",
+                    "Jordan Thompson"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Nuno Borges"
+                ],
+                [
+                    "17",
+                    "Karen Khachanov"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "K Majchrzak"
+                ],
+                [
+                    "",
+                    "Arthur Rinderknech"
+                ]
+            ],
+            [
+                [
+                    "Q",
+                    "Nicolas Jarry"
+                ],
+                [
+                    "",
+                    "Joao Fonseca"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Mattia Bellucci"
+                ],
+                [
+                    "",
+                    "Cameron Norrie"
+                ]
+            ],
+            [
+                [
+                    "14",
+                    "Andrey Rublev"
+                ],
+                [
+                    "Q",
+                    "Andrea Mannarino"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Jan Lennard Struff"
+                ],
+                [
+                    "2",
+                    "Carlos Alcaraz"
+                ]
+            ]
+        ],
+        "womens": [
+            [
+                [
+                    "1",
+                    "Aryna Sabalenka"
+                ],
+                [
+                    "",
+                    "Emma Raducanu"
+                ]
+            ],
+            [
+                [
+                    "24",
+                    "Elise Mertens"
+                ],
+                [
+                    "14",
+                    "Elina Svitolina"
+                ]
+            ],
+            [
+                [
+                    "LL",
+                    "Solana Sierra"
+                ],
+                [
+                    "",
+                    "Cristina Bucsa"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Laura Siegemund"
+                ],
+                [
+                    "6",
+                    "Madison Keys"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Kamilla Rakhimova"
+                ],
+                [
+                    "30",
+                    "Linda Noskova"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Dalma Galfi"
+                ],
+                [
+                    "13",
+                    "Amanda Anisimova"
+                ]
+            ],
+            [
+                [
+                    "Q",
+                    "Diane Parry"
+                ],
+                [
+                    "",
+                    "Sonay Kartal"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "A. Pavlyuchenkova"
+                ],
+                [
+                    "",
+                    "Naomi Osaka"
+                ]
+            ],
+            [
+                [
+                    "7",
+                    "Mirra Andreeva"
+                ],
+                [
+                    "",
+                    "Hailey Baptiste"
+                ]
+            ],
+            [
+                [
+                    "17",
+                    "Barbora Krejcikova"
+                ],
+                [
+                    "10",
+                    "Emma Navarro"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Zeynep Xonmez"
+                ],
+                [
+                    "18",
+                    "Ekaterina Alexandrova"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Belinda Bencic"
+                ],
+                [
+                    "",
+                    "Elisabetta Cocciaretto"
+                ]
+            ],
+            [
+                [
+                    "8",
+                    "Iga Swiatek"
+                ],
+                [
+                    "",
+                    "Danielle Collins"
+                ]
+            ],
+            [
+                [
+                    "22",
+                    "Clara Tauson"
+                ],
+                [
+                    "11",
+                    "Elena Rybakina"
+                ]
+            ],
+            [
+                [
+                    "16",
+                    "Daria Kasatkina"
+                ],
+                [
+                    "16",
+                    "Liudmila Samsonova"
+                ]
+            ],
+            [
+                [
+                    "",
+                    "Jessica Bouzas Maneiro"
+                ],
+                [
+                    "",
+                    "Dayana Yastremska"
+                ]
+            ]
+        ]
+    },
+    "seed_map": {
+        "mens": {
+            "Jannik Sinner": "1",
+            "Pedro Martinez": "",
+            "Grigor Dimitrov": "19",
+            "Sebastian Ofner": "",
+            "Shelton/Hijikata": "",
+            "Fucsovics/Monfils": "",
+            "Brandon Nakashima": "",
+            "Lorenzo Sonego": "",
+            "Marin Cilic": "",
+            "Jaume Munar": "",
+            "Fabio Cobolli": "22",
+            "Jakub Mensik": "15",
+            "Alex de Minaur": "11",
+            "A. Holmgren": "Q",
+            "Miomir Kecmanovic": "",
+            "Novak Djokovic": "6",
+            "Taylor Fritz": "5",
+            "A. Davidovich Fokina": "",
+            "Luciano Darderi": "",
+            "Jordan Thompson": "",
+            "Nuno Borges": "",
+            "Karen Khachanov": "17",
+            "K Majchrzak": "",
+            "Arthur Rinderknech": "",
+            "Nicolas Jarry": "Q",
+            "Joao Fonseca": "",
+            "Mattia Bellucci": "",
+            "Cameron Norrie": "",
+            "Andrey Rublev": "14",
+            "Andrea Mannarino": "Q",
+            "Jan Lennard Struff": "",
+            "Carlos Alcaraz": "2"
+        },
+        "womens": {
+            "Aryna Sabalenka": "1",
+            "Emma Raducanu": "",
+            "Elise Mertens": "24",
+            "Elina Svitolina": "14",
+            "Solana Sierra": "LL",
+            "Cristina Bucsa": "",
+            "Laura Siegemund": "",
+            "Madison Keys": "6",
+            "Kamilla Rakhimova": "",
+            "Linda Noskova": "30",
+            "Dalma Galfi": "",
+            "Amanda Anisimova": "13",
+            "Diane Parry": "Q",
+            "Sonay Kartal": "",
+            "A. Pavlyuchenkova": "",
+            "Naomi Osaka": "",
+            "Mirra Andreeva": "7",
+            "Hailey Baptiste": "",
+            "Barbora Krejcikova": "17",
+            "Emma Navarro": "10",
+            "Zeynep Xonmez": "",
+            "Ekaterina Alexandrova": "18",
+            "Belinda Bencic": "",
+            "Elisabetta Cocciaretto": "",
+            "Iga Swiatek": "8",
+            "Danielle Collins": "",
+            "Clara Tauson": "22",
+            "Elena Rybakina": "11",
+            "Daria Kasatkina": "16",
+            "Liudmila Samsonova": "16",
+            "Jessica Bouzas Maneiro": "",
+            "Dayana Yastremska": ""
+        }
+    },
+    "actual_results": {
+        "mens-r32-match-8": "Taylor Fritz",
+        "mens-r32-match-9": "Jordan Thompson",
+        "mens-r32-match-10": "Karen Khachanov",
+        "mens-r32-match-11": "K Majchrzak",
+        "mens-r32-match-12": "Nicolas Jarry",
+        "mens-r32-match-13": "Cameron Norrie",
+        "mens-r32-match-14": "Andrey Rublev",
+        "mens-r32-match-15": "Carlos Alcaraz",
+        "womens-r32-match-0": "Aryna Sabalenka",
+        "womens-r32-match-1": "Elise Mertens",
+        "womens-r32-match-2": "Solana Sierra",
+        "womens-r32-match-3": "Laura Siegemund",
+        "womens-r32-match-4": "Linda Noskova",
+        "womens-r32-match-5": "Amanda Anisimova",
+        "womens-r32-match-6": "Sonay Kartal",
+        "womens-r32-match-7": "A. Pavlyuchenkova"
+    },
+    "participants": [
+        {
+            "name": "Jose Calderon",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Brandon Nakashima",
+                "mens-r16-match-2": "Marin Cilic",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "K Majchrzak",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Novak Djokovic",
+                "mens-sf-match-1": "Taylor Fritz",
+                "mens-f-match-0": "Novak Djokovic",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elise Mertens",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "A. Pavlyuchenkova",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Jessica Bouzas Maneiro",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "A. Pavlyuchenkova",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Mirra Andreeva"
+            },
+            "score": 26,
+            "max_score": 201
+        },
+        {
+            "name": "Spasebo Elena",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Brandon Nakashima",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "K Majchrzak",
+                "mens-r16-match-6": "Nicolas Jarry",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Jakub Mensik",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jakub Mensik",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elise Mertens",
+                "womens-r32-match-2": "Solana Sierra",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Diane Parry",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Emma Navarro",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Dayana Yastremska",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Ekaterina Alexandrova",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Amanda Anisimova",
+                "womens-sf-match-1": "Elena Rybakina",
+                "womens-f-match-0": "Elena Rybakina"
+            },
+            "score": 24,
+            "max_score": 191
+        },
+        {
+            "name": "Arjun",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Sebastian Ofner",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Nicolas Jarry",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Novak Djokovic",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Barbora Krejcikova",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 22,
+            "max_score": 186
+        },
+        {
+            "name": "Jason",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Marin Cilic",
+                "mens-r16-match-3": "Alex de Minaur",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Alex de Minaur",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Solana Sierra",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Elena Rybakina",
+                "womens-f-match-0": "Elena Rybakina"
+            },
+            "score": 22,
+            "max_score": 194
+        },
+        {
+            "name": "Michael Nathe The Champ",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Mattia Bellucci",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Nicolas Jarry",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Novak Djokovic",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Solana Sierra",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Elena Rybakina",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 22,
+            "max_score": 194
+        },
+        {
+            "name": "Rob",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Sebastian Ofner",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Jaume Munar",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jaume Munar",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "K Majchrzak",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "K Majchrzak",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Emma Raducanu",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Solana Sierra",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Jessica Bouzas Maneiro",
+                "womens-r16-match-0": "Elina Svitolina",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Linda Noskova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Elina Svitolina",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Naomi Osaka",
+                "womens-sf-match-1": "Elena Rybakina",
+                "womens-f-match-0": "Elena Rybakina"
+            },
+            "score": 22,
+            "max_score": 170
+        },
+        {
+            "name": "Spyq",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Jakub Mensik",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Solana Sierra",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 22,
+            "max_score": 191
+        },
+        {
+            "name": "Tomas Clairvoyant Perez",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Lorenzo Sonego",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Jordan Thompson",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Nicolas Jarry",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Jordan Thompson",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Diane Parry",
+                "womens-r32-match-7": "A. Pavlyuchenkova",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Diane Parry",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Dayana Yastremska",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 22,
+            "max_score": 194
+        },
+        {
+            "name": "Alex Winslow",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Shelton/Hijikata",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Novak Djokovic",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Diane Parry",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Barbora Krejcikova",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Linda Noskova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Linda Noskova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Madison Keys",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Madison Keys"
+            },
+            "score": 20,
+            "max_score": 163
+        },
+        {
+            "name": "Brandon Lay",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Iga Swiatek",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 20,
+            "max_score": 192
+        },
+        {
+            "name": "Chad Martin",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Linda Noskova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Dayana Yastremska",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Dayana Yastremska",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Dayana Yastremska",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 20,
+            "max_score": 181
+        },
+        {
+            "name": "Diego",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Sebastian Ofner",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Fabio Cobolli",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Mattia Bellucci",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Fabio Cobolli",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Nicolas Jarry",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Jessica Bouzas Maneiro",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Danielle Collins",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Danielle Collins",
+                "womens-sf-match-0": "Madison Keys",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Mirra Andreeva"
+            },
+            "score": 20,
+            "max_score": 171
+        },
+        {
+            "name": "Fernando",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Novak Djokovic",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Novak Djokovic",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Emma Navarro",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Emma Navarro",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Iga Swiatek",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 20,
+            "max_score": 189
+        },
+        {
+            "name": "Jordan",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Jaume Munar",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Luciano Darderi",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Luciano Darderi",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elise Mertens",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Diane Parry",
+                "womens-r32-match-7": "A. Pavlyuchenkova",
+                "womens-r32-match-8": "Hailey Baptiste",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Elisabetta Cocciaretto",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "A. Pavlyuchenkova",
+                "womens-r16-match-4": "Hailey Baptiste",
+                "womens-r16-match-5": "Elisabetta Cocciaretto",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "A. Pavlyuchenkova",
+                "womens-qf-match-2": "Hailey Baptiste",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Iga Swiatek",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 20,
+            "max_score": 184
+        },
+        {
+            "name": "Manny Manito",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Fucsovics/Monfils",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "A. Davidovich Fokina",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Grigor Dimitrov",
+                "mens-r16-match-1": "Fucsovics/Monfils",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "A. Davidovich Fokina",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Grigor Dimitrov",
+                "mens-qf-match-1": "Jakub Mensik",
+                "mens-qf-match-2": "A. Davidovich Fokina",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Grigor Dimitrov",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Solana Sierra",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Kamilla Rakhimova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Elisabetta Cocciaretto",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Kamilla Rakhimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Elisabetta Cocciaretto",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Kamilla Rakhimova",
+                "womens-qf-match-2": "Elisabetta Cocciaretto",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Elena Rybakina",
+                "womens-f-match-0": "Elena Rybakina"
+            },
+            "score": 20,
+            "max_score": 176
+        },
+        {
+            "name": "Matty",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Mattia Bellucci",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Nicolas Jarry",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Karen Khachanov",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Emma Navarro",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Emma Navarro",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Iga Swiatek",
+                "womens-f-match-0": "Iga Swiatek"
+            },
+            "score": 20,
+            "max_score": 187
+        },
+        {
+            "name": "Peter Sullivan",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Sebastian Ofner",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Jakub Mensik",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Sonay Kartal",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 20,
+            "max_score": 195
+        },
+        {
+            "name": "Tao",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Emma Navarro",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Danielle Collins",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Ekaterina Alexandrova",
+                "womens-qf-match-3": "Daria Kasatkina",
+                "womens-sf-match-0": "Madison Keys",
+                "womens-sf-match-1": "Ekaterina Alexandrova",
+                "womens-f-match-0": "Madison Keys"
+            },
+            "score": 20,
+            "max_score": 163
+        },
+        {
+            "name": "Will Edman",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Lorenzo Sonego",
+                "mens-r16-match-2": "Marin Cilic",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Barbora Krejcikova",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Linda Noskova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Madison Keys",
+                "womens-sf-match-1": "Elena Rybakina",
+                "womens-f-match-0": "Madison Keys"
+            },
+            "score": 20,
+            "max_score": 158
+        },
+        {
+            "name": "Alicia",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Marin Cilic",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Karen Khachanov",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Kamilla Rakhimova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "A. Pavlyuchenkova",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Jessica Bouzas Maneiro",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "A. Pavlyuchenkova",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Madison Keys",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Mirra Andreeva"
+            },
+            "score": 18,
+            "max_score": 177
+        },
+        {
+            "name": "Eric Hot Picks Smith",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Fabio Cobolli",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrea Mannarino",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Fabio Cobolli",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 18,
+            "max_score": 187
+        },
+        {
+            "name": "Eric Katerman",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "A. Davidovich Fokina",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrea Mannarino",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Alex de Minaur",
+                "mens-r16-match-4": "Jordan Thompson",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Jakub Mensik",
+                "mens-qf-match-2": "Jordan Thompson",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elise Mertens",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Diane Parry",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Barbora Krejcikova",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Diane Parry",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Belinda Bencic",
+                "womens-r16-match-6": "Danielle Collins",
+                "womens-r16-match-7": "Dayana Yastremska",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Danielle Collins",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Mirra Andreeva"
+            },
+            "score": 18,
+            "max_score": 187
+        },
+        {
+            "name": "Liam",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Jaume Munar",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jaume Munar",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Kamilla Rakhimova",
+                "womens-r32-match-5": "Dalma Galfi",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "A. Pavlyuchenkova",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Zeynep Xonmez",
+                "womens-r32-match-11": "Elisabetta Cocciaretto",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Cristina Bucsa",
+                "womens-r16-match-2": "Kamilla Rakhimova",
+                "womens-r16-match-3": "A. Pavlyuchenkova",
+                "womens-r16-match-4": "Emma Navarro",
+                "womens-r16-match-5": "Elisabetta Cocciaretto",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "A. Pavlyuchenkova",
+                "womens-qf-match-2": "Emma Navarro",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Iga Swiatek",
+                "womens-f-match-0": "Iga Swiatek"
+            },
+            "score": 18,
+            "max_score": 184
+        },
+        {
+            "name": "Marc Rouda",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Jordan Thompson",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Karen Khachanov",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Diane Parry",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Belinda Bencic",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Jessica Bouzas Maneiro",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 18,
+            "max_score": 187
+        },
+        {
+            "name": "Gary",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "A. Davidovich Fokina",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Nuno Borges",
+                "mens-r32-match-11": "K Majchrzak",
+                "mens-r32-match-12": "Nicolas Jarry",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Marin Cilic",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "A. Davidovich Fokina",
+                "mens-r16-match-5": "Nuno Borges",
+                "mens-r16-match-6": "Cameron Norrie",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Nuno Borges",
+                "mens-qf-match-3": "Cameron Norrie",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Cameron Norrie",
+                "mens-f-match-0": "Jannik Sinner",
+                "womens-r32-match-0": "Emma Raducanu",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Linda Noskova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Elisabetta Cocciaretto",
+                "womens-r32-match-12": "Danielle Collins",
+                "womens-r32-match-13": "Clara Tauson",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Emma Raducanu",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Danielle Collins",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Madison Keys",
+                "womens-qf-match-1": "Naomi Osaka",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Danielle Collins",
+                "womens-sf-match-0": "Madison Keys",
+                "womens-sf-match-1": "Danielle Collins",
+                "womens-f-match-0": "Danielle Collins"
+            },
+            "score": 16,
+            "max_score": 156
+        },
+        {
+            "name": "Jay",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Grigor Dimitrov",
+                "mens-r32-match-2": "Fucsovics/Monfils",
+                "mens-r32-match-3": "Brandon Nakashima",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Karen Khachanov",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Cameron Norrie",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Brandon Nakashima",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Taylor Fritz",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Jannik Sinner",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Kamilla Rakhimova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "Naomi Osaka",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Elisabetta Cocciaretto",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Liudmila Samsonova",
+                "womens-r32-match-15": "Jessica Bouzas Maneiro",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Naomi Osaka",
+                "womens-r16-match-4": "Mirra Andreeva",
+                "womens-r16-match-5": "Elisabetta Cocciaretto",
+                "womens-r16-match-6": "Iga Swiatek",
+                "womens-r16-match-7": "Liudmila Samsonova",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Mirra Andreeva",
+                "womens-qf-match-3": "Iga Swiatek",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Mirra Andreeva",
+                "womens-f-match-0": "Mirra Andreeva"
+            },
+            "score": 16,
+            "max_score": 182
+        },
+        {
+            "name": "Phil",
+            "picks": {
+                "mens-r32-match-0": "Jannik Sinner",
+                "mens-r32-match-1": "Sebastian Ofner",
+                "mens-r32-match-2": "Shelton/Hijikata",
+                "mens-r32-match-3": "Lorenzo Sonego",
+                "mens-r32-match-4": "Marin Cilic",
+                "mens-r32-match-5": "Jakub Mensik",
+                "mens-r32-match-6": "Alex de Minaur",
+                "mens-r32-match-7": "Novak Djokovic",
+                "mens-r32-match-8": "Taylor Fritz",
+                "mens-r32-match-9": "Luciano Darderi",
+                "mens-r32-match-10": "Nuno Borges",
+                "mens-r32-match-11": "Arthur Rinderknech",
+                "mens-r32-match-12": "Joao Fonseca",
+                "mens-r32-match-13": "Mattia Bellucci",
+                "mens-r32-match-14": "Andrey Rublev",
+                "mens-r32-match-15": "Carlos Alcaraz",
+                "mens-r16-match-0": "Jannik Sinner",
+                "mens-r16-match-1": "Shelton/Hijikata",
+                "mens-r16-match-2": "Jakub Mensik",
+                "mens-r16-match-3": "Novak Djokovic",
+                "mens-r16-match-4": "Taylor Fritz",
+                "mens-r16-match-5": "Arthur Rinderknech",
+                "mens-r16-match-6": "Joao Fonseca",
+                "mens-r16-match-7": "Carlos Alcaraz",
+                "mens-qf-match-0": "Jannik Sinner",
+                "mens-qf-match-1": "Novak Djokovic",
+                "mens-qf-match-2": "Arthur Rinderknech",
+                "mens-qf-match-3": "Carlos Alcaraz",
+                "mens-sf-match-0": "Novak Djokovic",
+                "mens-sf-match-1": "Carlos Alcaraz",
+                "mens-f-match-0": "Carlos Alcaraz",
+                "womens-r32-match-0": "Aryna Sabalenka",
+                "womens-r32-match-1": "Elina Svitolina",
+                "womens-r32-match-2": "Cristina Bucsa",
+                "womens-r32-match-3": "Madison Keys",
+                "womens-r32-match-4": "Kamilla Rakhimova",
+                "womens-r32-match-5": "Amanda Anisimova",
+                "womens-r32-match-6": "Sonay Kartal",
+                "womens-r32-match-7": "A. Pavlyuchenkova",
+                "womens-r32-match-8": "Mirra Andreeva",
+                "womens-r32-match-9": "Emma Navarro",
+                "womens-r32-match-10": "Ekaterina Alexandrova",
+                "womens-r32-match-11": "Elisabetta Cocciaretto",
+                "womens-r32-match-12": "Iga Swiatek",
+                "womens-r32-match-13": "Elena Rybakina",
+                "womens-r32-match-14": "Daria Kasatkina",
+                "womens-r32-match-15": "Dayana Yastremska",
+                "womens-r16-match-0": "Aryna Sabalenka",
+                "womens-r16-match-1": "Madison Keys",
+                "womens-r16-match-2": "Amanda Anisimova",
+                "womens-r16-match-3": "Sonay Kartal",
+                "womens-r16-match-4": "Emma Navarro",
+                "womens-r16-match-5": "Ekaterina Alexandrova",
+                "womens-r16-match-6": "Elena Rybakina",
+                "womens-r16-match-7": "Daria Kasatkina",
+                "womens-qf-match-0": "Aryna Sabalenka",
+                "womens-qf-match-1": "Amanda Anisimova",
+                "womens-qf-match-2": "Emma Navarro",
+                "womens-qf-match-3": "Elena Rybakina",
+                "womens-sf-match-0": "Aryna Sabalenka",
+                "womens-sf-match-1": "Emma Navarro",
+                "womens-f-match-0": "Aryna Sabalenka"
+            },
+            "score": 14,
+            "max_score": 178
+        }
+    ]
+};
+
+        const ROUNDS = [
+            { "name": "Round of 32", "key": "r32" },
+            { "name": "Round of 16", "key": "r16" },
+            { "name": "Quarterfinals", "key": "qf" },
+            { "name": "Semifinals", "key": "sf" },
+            { "name": "Final", "key": "f" }
+        ];
+
+        function createBracketDisplay(container, category, participantPicks) {
+            container.innerHTML = '';
+
+            ROUNDS.forEach((round, roundIndex) => {
+                const roundDiv = document.createElement('div');
+                roundDiv.classList.add('round');
+                const roundTitle = document.createElement('div');
+                roundTitle.classList.add('round-title');
+                roundTitle.textContent = round.name;
+                roundDiv.appendChild(roundTitle);
+                const matchupWrapper = document.createElement('div');
+                matchupWrapper.classList.add('matchup-wrapper');
+
+                const numMatches = 16 / Math.pow(2, roundIndex);
+                for (let i = 0; i < numMatches; i++) {
+                    const matchupId = `${category}-${round.key}-match-${i}`;
+                    const matchupDiv = document.createElement('div');
+                    matchupDiv.classList.add('matchup');
+
+                    let player1, player2;
+
+                    if (roundIndex === 0) {
+                        player1 = viewerData.initial_entrants[category][i][0];
+                        player2 = viewerData.initial_entrants[category][i][1];
+                    } else {
+                        const prevRoundKey = ROUNDS[roundIndex - 1].key;
+                        const p1MatchupId = `${category}-${prevRoundKey}-match-${i * 2}`;
+                        const p2MatchupId = `${category}-${prevRoundKey}-match-${i * 2 + 1}`;
+
+                        const p1Name = participantPicks[p1MatchupId] || "TBD";
+                        const p2Name = participantPicks[p2MatchupId] || "TBD";
+
+                        const p1Seed = viewerData.seed_map[category][p1Name] || "";
+                        const p2Seed = viewerData.seed_map[category][p2Name] || "";
+
+                        player1 = [p1Seed, p1Name];
+                        player2 = [p2Seed, p2Name];
+                    }
+
+                    const predictedWinner = participantPicks[matchupId];
+                    const actualWinner = viewerData.actual_results[matchupId];
+
+                    const p1Classes = ['player-name'];
+                    if (predictedWinner === player1[1]) p1Classes.push('winner');
+
+                    const p2Classes = ['player-name'];
+                    if (predictedWinner === player2[1]) p2Classes.push('winner');
+
+                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner) {
+                        const winnerSpanClasses = (predictedWinner === player1[1]) ? p1Classes : p2Classes;
+                        if (predictedWinner === actualWinner) {
+                            winnerSpanClasses.push('correct-pick');
+                        } else {
+                            winnerSpanClasses.push('incorrect-pick');
+                        }
+                    }
+
+                    matchupDiv.innerHTML = `
+                        <div class="player"><span class="player-seed">${player1[0]}</span><span class="${p1Classes.join(' ')}">${player1[1]}</span></div>
+                        <div class="player"><span class="player-seed">${player2[0]}</span><span class="${p2Classes.join(' ')}">${player2[1]}</span></div>
+                    `;
+
+                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner && predictedWinner !== actualWinner) {
+                        const note = document.createElement('div');
+                        note.className = 'actual-winner-note';
+                        note.textContent = `Actual: ${actualWinner}`;
+                        matchupDiv.appendChild(note);
+                    }
+                    matchupWrapper.appendChild(matchupDiv);
+                }
+                roundDiv.appendChild(matchupWrapper);
+                container.appendChild(roundDiv);
+            });
+
+            const championContainer = document.createElement('div');
+            championContainer.classList.add('champion-container');
+            const finalWinner = participantPicks[`${category}-f-match-0`] || "";
+            championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div class="champion-name">${finalWinner}</div></div>`;
+            container.appendChild(championContainer);
+        }
+
+        function goToTab(tabId) {
+            const button = document.querySelector(`.tab-button[data-tab-id='${tabId}']`);
+            if (button) {
+                openTab(tabId);
+                button.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function openTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+
+            document.getElementById(tabId).style.display = 'block';
+            document.querySelectorAll(`[data-tab-id="${tabId}"]`).forEach(b => b.classList.add('active'));
+        }
+
+        function setupViewer() {
+            const navContainer = document.getElementById('tab-navigation');
+            const contentContainer = document.getElementById('tab-contents');
+
+            const allParticipants = [{"name": "Actual Results", "picks": viewerData.actual_results, "score": null}, ...viewerData.participants];
+
+            allParticipants.forEach((p, index) => {
+                const nameKey = p.name.replace(/\s+/g, '-');
+                const tabId = `${nameKey}-tab`;
+
+                const btn = document.createElement('button');
+                btn.className = 'tab-button';
+                btn.textContent = p.name;
+                btn.dataset.tabId = tabId;
+                btn.onclick = () => openTab(tabId);
+                navContainer.appendChild(btn);
+
+                const tab = document.createElement('div');
+                tab.id = tabId;
+                tab.className = 'tab-content';
+
+                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${p.score} pts | Max Possible: ${p.max_score} pts</h3>` : '';
+
+                tab.innerHTML = scoreHtml + `
+                    <h2>Men's Singles</h2><div id="${nameKey}-mens-bracket" class="bracket-container"></div>
+                    <h2>Women's Singles</h2><div id="${nameKey}-womens-bracket" class="bracket-container"></div>`;
+                contentContainer.appendChild(tab);
+
+                createBracketDisplay(tab.querySelector(`#${nameKey}-mens-bracket`), 'mens', p.picks);
+                createBracketDisplay(tab.querySelector(`#${nameKey}-womens-bracket`), 'womens', p.picks);
+
+                if (index === 0) {
+                    btn.classList.add('active');
+                    tab.style.display = 'block';
+                }
+            });
+
+            const bottomNavContainer = document.getElementById('tab-navigation-bottom');
+            bottomNavContainer.innerHTML = navContainer.innerHTML;
+            bottomNavContainer.querySelectorAll('.tab-button').forEach(btn => {
+                const tabId = btn.dataset.tabId;
+                btn.onclick = () => openTab(tabId);
+            });
+        }
+
+        setupViewer();
+    </script>
+</body>
+</html>
+    
