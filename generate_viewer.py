@@ -87,14 +87,18 @@ def read_prediction_file(filepath):
         return None
     return picks
 
-def get_active_players(initial_entrants, actual_results, debug=False):
-    """Determines which players are still in the tournament."""
+def get_active_and_eliminated_players(initial_entrants, actual_results, debug=False):
+    """
+    Determines which players are still in the tournament and which are out.
+    This new logic correctly identifies losers from each match.
+    """
     all_players_in_draw = set()
     for category in ['mens', 'womens']:
         for matchup in initial_entrants[category]:
             all_players_in_draw.add(matchup[0][1])
             all_players_in_draw.add(matchup[1][1])
 
+    # First, reconstruct the actual matchups that have been played
     actual_matchups = {}
     for category in ['mens', 'womens']:
         for round_index, round_info in enumerate(ROUNDS):
@@ -118,15 +122,20 @@ def get_active_players(initial_entrants, actual_results, debug=False):
                     if p1 and p2:
                         actual_matchups[match_id] = (p1, p2)
 
-    players_who_played = set()
-    for p1, p2 in actual_matchups.values():
-        players_who_played.add(p1)
-        players_who_played.add(p2)
+    # NEW, CORRECTED LOGIC: Explicitly find the loser of each match
+    eliminated = set()
+    for match_id, players in actual_matchups.items():
+        p1, p2 = players
+        winner = actual_results.get(match_id)
+        # Add the player who is NOT the winner to the eliminated set
+        if p1 == winner:
+            eliminated.add(p2)
+        elif p2 == winner:
+            eliminated.add(p1)
 
-    winners = set(actual_results.values())
-    eliminated = players_who_played - winners
+    active = all_players_in_draw - eliminated
 
-    return all_players_in_draw - eliminated
+    return active, list(eliminated)
 
 def calculate_scores(picks, actual_results, points_per_round):
     """Calculates the current score for a set of picks."""
@@ -164,7 +173,8 @@ def create_viewer_data(predictions_dir, entrants_file, debug=False):
         "initial_entrants": initial_entrants,
         "seed_map": { "mens": mens_seed_map, "womens": womens_seed_map },
         "actual_results": None,
-        "participants": []
+        "participants": [],
+        "eliminated_players": []
     }
 
     master_filepath = os.path.join(predictions_dir, master_filename)
@@ -176,7 +186,8 @@ def create_viewer_data(predictions_dir, entrants_file, debug=False):
     if viewer_data["actual_results"] is None:
         return None
 
-    active_players = get_active_players(initial_entrants, viewer_data["actual_results"], debug)
+    active_players, eliminated_players = get_active_and_eliminated_players(initial_entrants, viewer_data["actual_results"], debug)
+    viewer_data["eliminated_players"] = eliminated_players
 
     for filename in sorted(os.listdir(predictions_dir)):
         if filename.endswith("_predictions.csv") and filename != master_filename:
@@ -236,8 +247,6 @@ def generate_viewer_html(viewer_data, output_path):
     leaderboard_html = generate_leaderboard_html(viewer_data["participants"])
 
     # Break the HTML into parts to avoid f-string parsing issues with JS/CSS.
-    # Part 1 contains the head and the start of the body. It uses an f-string
-    # only for the safe leaderboard_html variable.
     html_part1 = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -274,7 +283,7 @@ def generate_viewer_html(viewer_data, output_path):
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
         .bracket-container {{
-            position: relative; /* This is the key fix! */
+            position: relative;
             display: flex;
             align-items: stretch;
             justify-content: flex-start;
@@ -295,6 +304,7 @@ def generate_viewer_html(viewer_data, output_path):
         .tbd {{ font-style: italic; color: #999; }}
         .player-name.correct-pick {{ background-color: #d4edda; border-radius: 3px; padding: 2px 4px; }}
         .player-name.incorrect-pick {{ background-color: #f8d7da; text-decoration: line-through; border-radius: 3px; padding: 2px 4px; }}
+        .player-name.eliminated-player {{ text-decoration: line-through; color: #999; }}
         .actual-winner-note {{ font-size: 0.8em; color: #005A31; margin-left: 5px; padding-top: 5px; }}
         .champion-container {{ display: flex; align-items: center; justify-content: center; }}
         .champion-box {{ display: flex; flex-direction: column; align-items: center; justify-content: center; }}
@@ -313,8 +323,6 @@ def generate_viewer_html(viewer_data, output_path):
         const viewerData =
 """
 
-    # Part 2 is the rest of the script. It is a regular string, not an f-string,
-    # so no escaping of curly braces is needed.
     html_part2 = """
         const ROUNDS = [
             { "name": "Round of 32", "key": "r32" },
@@ -375,9 +383,15 @@ def generate_viewer_html(viewer_data, output_path):
 
                     const p1Classes = ['player-name'];
                     if (predictedWinner === player1[1]) p1Classes.push('winner');
+                    if (viewerData.eliminated_players.includes(player1[1])) {
+                        p1Classes.push('eliminated-player');
+                    }
 
                     const p2Classes = ['player-name'];
                     if (predictedWinner === player2[1]) p2Classes.push('winner');
+                    if (viewerData.eliminated_players.includes(player2[1])) {
+                        p2Classes.push('eliminated-player');
+                    }
 
                     if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner) {
                         const winnerSpanClasses = (predictedWinner === player1[1]) ? p1Classes : p2Classes;
@@ -420,16 +434,9 @@ def generate_viewer_html(viewer_data, output_path):
             }
         }
 
-        /**
-         * Sets the initial horizontal scroll position for a bracket container.
-         * @param {HTMLElement} container The bracket container element.
-         */
         function setDefaultScrollView(container) {
-            // The "Quarterfinals" is the third round div (index 2)
             const roundToView = container.querySelectorAll('.round')[2];
             if (roundToView) {
-                // Use a short timeout to ensure the browser has calculated the layout
-                // before we try to scroll. This resolves potential timing issues.
                 setTimeout(() => {
                     container.scrollTo({ left: roundToView.offsetLeft, behavior: 'auto' });
                 }, 0);
@@ -443,7 +450,6 @@ def generate_viewer_html(viewer_data, output_path):
             const tabToShow = document.getElementById(tabId);
             if (tabToShow) {
                 tabToShow.style.display = 'block';
-                // Scroll the brackets within the newly visible tab
                 const bracketContainers = tabToShow.querySelectorAll('.bracket-container');
                 bracketContainers.forEach(container => setDefaultScrollView(container));
             }
@@ -501,7 +507,7 @@ def generate_viewer_html(viewer_data, output_path):
 
                 const tab = document.createElement('div');
                 tab.id = tabId;
-                tab.className = 'tab-content'; // Initially hidden by default
+                tab.className = 'tab-content';
 
                 let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${p.score} pts | Max Possible: ${p.max_score} pts</h3>` : '';
 
@@ -524,8 +530,6 @@ def generate_viewer_html(viewer_data, output_path):
                 btn.onclick = () => openTab(tabId);
             });
 
-            // After all tabs are created, open the first one.
-            // This will make it visible and trigger the default scroll.
             if (firstTabId) {
                 openTab(firstTabId);
             }
@@ -536,7 +540,6 @@ def generate_viewer_html(viewer_data, output_path):
 </body>
 </html>
 """
-    # Combine the parts: HTML part 1, the JSON data, a semicolon for JS, and HTML part 2.
     html_template = html_part1 + json.dumps(viewer_data, indent=4) + ";" + html_part2
 
     with open(output_path, 'w', encoding='utf-8') as f:
