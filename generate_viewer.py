@@ -195,8 +195,16 @@ def create_viewer_data(predictions_dir, entrants_file, debug=False):
                 })
 
     viewer_data["participants"].sort(key=lambda p: p["score"], reverse=True)
+
+    # Assign ranks, handling ties (e.g., 1, 2, 2, 4)
+    rank = 0
+    last_score = -1
     for i, p in enumerate(viewer_data["participants"]):
-        p['rank'] = i + 1
+        # Check if the score is different from the last participant's score
+        if p["score"] != last_score:
+            rank = i + 1  # Update rank to the current position (1-based index)
+            last_score = p["score"]
+        p['rank'] = rank # Assign the calculated rank
 
     return viewer_data
 
@@ -227,7 +235,10 @@ def generate_viewer_html(viewer_data, output_path):
 
     leaderboard_html = generate_leaderboard_html(viewer_data["participants"])
 
-    html_template = f"""
+    # Break the HTML into parts to avoid f-string parsing issues with JS/CSS.
+    # Part 1 contains the head and the start of the body. It uses an f-string
+    # only for the safe leaderboard_html variable.
+    html_part1 = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -247,7 +258,6 @@ def generate_viewer_html(viewer_data, output_path):
         h1 {{ font-size: 2.5em; margin-bottom: 0.25em; }}
         h2 {{ font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }}
         h3 {{ font-size: 1.2em; margin-bottom: 1em; color: #4A0072; }}
-
         .leaderboard-container {{ max-width: 600px; margin: 2em auto; }}
         table {{ width: 100%; border-collapse: collapse; background-color: #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }}
         th, td {{ padding: 12px 15px; text-align: left; }}
@@ -257,33 +267,35 @@ def generate_viewer_html(viewer_data, output_path):
         tbody tr {{ border-bottom: 1px solid #ddd; }}
         tbody tr:hover {{ background-color: #f0e6f6; }}
         td:first-child {{ font-weight: bold; }}
-
         .tab-nav {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 2em auto; max-width: 1200px; }}
         .tab-button {{ padding: 0.8em 1.5em; font-size: 1em; font-weight: bold; border: 2px solid #4A0072; background-color: #fff; color: #4A0072; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s; text-align: center; }}
         .tab-button:hover {{ background-color: #f0e6f6; }}
         .tab-button.active {{ background-color: #4A0072; color: #fff; }}
-
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
-
-        .bracket-container {{ display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }}
+        .bracket-container {{
+            position: relative; /* This is the key fix! */
+            display: flex;
+            align-items: stretch;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding: 20px;
+            -webkit-overflow-scrolling: touch;
+        }}
         .round {{ display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }}
-        .round-title {{ font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; }}
+        .round-title {{ font-size: 1.2em; font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; transition: color 0.2s; }}
+        .round-title:hover {{ color: #005A31; text-decoration: underline; }}
         .matchup-wrapper {{ display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; }}
-
         .matchup {{ background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 270px; position: relative; }}
         .matchup-wrapper > .matchup:not(:last-child) {{ margin-bottom: 28px; }}
-
         .player {{ display: flex; align-items: center; margin: 8px 0; border-radius: 5px; }}
         .player-seed {{ font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }}
         .player-name {{ flex-grow: 1; font-size: 1em; color: #333; }}
         .player-name.winner {{ font-weight: bold; color: #005A31; }}
         .tbd {{ font-style: italic; color: #999; }}
-
         .player-name.correct-pick {{ background-color: #d4edda; border-radius: 3px; padding: 2px 4px; }}
         .player-name.incorrect-pick {{ background-color: #f8d7da; text-decoration: line-through; border-radius: 3px; padding: 2px 4px; }}
         .actual-winner-note {{ font-size: 0.8em; color: #005A31; margin-left: 5px; padding-top: 5px; }}
-
         .champion-container {{ display: flex; align-items: center; justify-content: center; }}
         .champion-box {{ display: flex; flex-direction: column; align-items: center; justify-content: center; }}
         .champion-trophy {{ font-size: 4em; color: #d4af37; line-height: 1; }}
@@ -297,46 +309,56 @@ def generate_viewer_html(viewer_data, output_path):
     <div id="tab-navigation" class="tab-nav"></div>
     <div id="tab-contents"></div>
     <div id="tab-navigation-bottom" class="tab-nav" style="margin-top: 2em; border-top: 2px solid #ddd; padding-top: 1em;"></div>
-
     <script>
-        const viewerData = {json.dumps(viewer_data, indent=4)};
+        const viewerData =
+"""
 
+    # Part 2 is the rest of the script. It is a regular string, not an f-string,
+    # so no escaping of curly braces is needed.
+    html_part2 = """
         const ROUNDS = [
-            {{ "name": "Round of 32", "key": "r32" }},
-            {{ "name": "Round of 16", "key": "r16" }},
-            {{ "name": "Quarterfinals", "key": "qf" }},
-            {{ "name": "Semifinals", "key": "sf" }},
-            {{ "name": "Final", "key": "f" }}
+            { "name": "Round of 32", "key": "r32" },
+            { "name": "Round of 16", "key": "r16" },
+            { "name": "Quarterfinals", "key": "qf" },
+            { "name": "Semifinals", "key": "sf" },
+            { "name": "Final", "key": "f" }
         ];
 
-        function createBracketDisplay(container, category, participantPicks) {{
+        function createBracketDisplay(container, category, participantPicks) {
             container.innerHTML = '';
 
-            ROUNDS.forEach((round, roundIndex) => {{
+            ROUNDS.forEach((round, roundIndex) => {
                 const roundDiv = document.createElement('div');
                 roundDiv.classList.add('round');
                 const roundTitle = document.createElement('div');
                 roundTitle.classList.add('round-title');
                 roundTitle.textContent = round.name;
+                roundTitle.style.cursor = 'pointer';
+                roundTitle.onclick = () => {
+                    container.scrollTo({
+                        left: roundDiv.offsetLeft,
+                        behavior: 'smooth'
+                    });
+                };
                 roundDiv.appendChild(roundTitle);
                 const matchupWrapper = document.createElement('div');
                 matchupWrapper.classList.add('matchup-wrapper');
 
                 const numMatches = 16 / Math.pow(2, roundIndex);
-                for (let i = 0; i < numMatches; i++) {{
-                    const matchupId = `${{category}}-${{round.key}}-match-${{i}}`;
+                for (let i = 0; i < numMatches; i++) {
+                    const matchupId = `${category}-${round.key}-match-${i}`;
                     const matchupDiv = document.createElement('div');
                     matchupDiv.classList.add('matchup');
 
                     let player1, player2;
 
-                    if (roundIndex === 0) {{
+                    if (roundIndex === 0) {
                         player1 = viewerData.initial_entrants[category][i][0];
                         player2 = viewerData.initial_entrants[category][i][1];
-                    }} else {{
+                    } else {
                         const prevRoundKey = ROUNDS[roundIndex - 1].key;
-                        const p1MatchupId = `${{category}}-${{prevRoundKey}}-match-${{i * 2}}`;
-                        const p2MatchupId = `${{category}}-${{prevRoundKey}}-match-${{i * 2 + 1}}`;
+                        const p1MatchupId = `${category}-${prevRoundKey}-match-${i * 2}`;
+                        const p2MatchupId = `${category}-${prevRoundKey}-match-${i * 2 + 1}`;
 
                         const p1Name = participantPicks[p1MatchupId] || "TBD";
                         const p2Name = participantPicks[p2MatchupId] || "TBD";
@@ -346,7 +368,7 @@ def generate_viewer_html(viewer_data, output_path):
 
                         player1 = [p1Seed, p1Name];
                         player2 = [p2Seed, p2Name];
-                    }}
+                    }
 
                     const predictedWinner = participantPicks[matchupId];
                     const actualWinner = viewerData.actual_results[matchupId];
@@ -357,90 +379,118 @@ def generate_viewer_html(viewer_data, output_path):
                     const p2Classes = ['player-name'];
                     if (predictedWinner === player2[1]) p2Classes.push('winner');
 
-                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner) {{
+                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner) {
                         const winnerSpanClasses = (predictedWinner === player1[1]) ? p1Classes : p2Classes;
-                        if (predictedWinner === actualWinner) {{
+                        if (predictedWinner === actualWinner) {
                             winnerSpanClasses.push('correct-pick');
-                        }} else {{
+                        } else {
                             winnerSpanClasses.push('incorrect-pick');
-                        }}
-                    }}
+                        }
+                    }
 
                     matchupDiv.innerHTML = `
-                        <div class="player"><span class="player-seed">${{player1[0]}}</span><span class="${{p1Classes.join(' ')}}">${{player1[1]}}</span></div>
-                        <div class="player"><span class="player-seed">${{player2[0]}}</span><span class="${{p2Classes.join(' ')}}">${{player2[1]}}</span></div>
+                        <div class="player"><span class="player-seed">${player1[0]}</span><span class="${p1Classes.join(' ')}">${player1[1]}</span></div>
+                        <div class="player"><span class="player-seed">${player2[0]}</span><span class="${p2Classes.join(' ')}">${player2[1]}</span></div>
                     `;
 
-                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner && predictedWinner !== actualWinner) {{
+                    if (participantPicks !== viewerData.actual_results && predictedWinner && actualWinner && predictedWinner !== actualWinner) {
                         const note = document.createElement('div');
                         note.className = 'actual-winner-note';
-                        note.textContent = `Actual: ${{actualWinner}}`;
+                        note.textContent = `Actual: ${actualWinner}`;
                         matchupDiv.appendChild(note);
-                    }}
+                    }
                     matchupWrapper.appendChild(matchupDiv);
-                }}
+                }
                 roundDiv.appendChild(matchupWrapper);
                 container.appendChild(roundDiv);
-            }});
+            });
 
             const championContainer = document.createElement('div');
             championContainer.classList.add('champion-container');
-            const finalWinner = participantPicks[`${{category}}-f-match-0`] || "";
-            championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div class="champion-name">${{finalWinner}}</div></div>`;
+            const finalWinner = participantPicks[`${category}-f-match-0`] || "";
+            championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div class="champion-name">${finalWinner}</div></div>`;
             container.appendChild(championContainer);
-        }}
+        }
 
-        function goToTab(tabId) {{
-            const button = document.querySelector(`.tab-button[data-tab-id='${{tabId}}']`);
-            if (button) {{
+        function goToTab(tabId) {
+            const button = document.querySelector(`.tab-button[data-tab-id='${tabId}']`);
+            if (button) {
                 openTab(tabId);
-                button.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
-            }}
-        }}
+                button.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
 
-        function openTab(tabId) {{
+        /**
+         * Sets the initial horizontal scroll position for a bracket container.
+         * @param {HTMLElement} container The bracket container element.
+         */
+        function setDefaultScrollView(container) {
+            // The "Quarterfinals" is the third round div (index 2)
+            const roundToView = container.querySelectorAll('.round')[2];
+            if (roundToView) {
+                // Use a short timeout to ensure the browser has calculated the layout
+                // before we try to scroll. This resolves potential timing issues.
+                setTimeout(() => {
+                    container.scrollTo({ left: roundToView.offsetLeft, behavior: 'auto' });
+                }, 0);
+            }
+        }
+
+        function openTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
 
-            document.getElementById(tabId).style.display = 'block';
-            document.querySelectorAll(`[data-tab-id="${{tabId}}"]`).forEach(b => b.classList.add('active'));
-        }}
+            const tabToShow = document.getElementById(tabId);
+            if (tabToShow) {
+                tabToShow.style.display = 'block';
+                // Scroll the brackets within the newly visible tab
+                const bracketContainers = tabToShow.querySelectorAll('.bracket-container');
+                bracketContainers.forEach(container => setDefaultScrollView(container));
+            }
 
-        function sortTable(sortBy) {{
+            document.querySelectorAll(`[data-tab-id="${tabId}"]`).forEach(b => b.classList.add('active'));
+        }
+
+        function sortTable(sortBy) {
             const sortedParticipants = [...viewerData.participants].sort((a, b) => b[sortBy] - a[sortBy]);
             renderLeaderboard(sortedParticipants);
-        }}
+        }
 
-        function renderLeaderboard(participants) {{
+        function renderLeaderboard(participants) {
             const tbody = document.getElementById('leaderboard-body');
             tbody.innerHTML = '';
-            participants.forEach(p => {{
+            participants.forEach(p => {
                 const nameKey = p.name.replace(/\\s+/g, '-');
-                const tabId = `${{nameKey}}-tab`;
+                const tabId = `${nameKey}-tab`;
                 const row = document.createElement('tr');
                 row.style.cursor = 'pointer';
                 row.onclick = () => goToTab(tabId);
                 row.innerHTML = `
-                    <td>${{p.rank}}</td>
-                    <td>${{p.name}}</td>
-                    <td>${{p.score}}</td>
-                    <td>${{p.max_score}}</td>
+                    <td>${p.rank}</td>
+                    <td>${p.name}</td>
+                    <td>${p.score}</td>
+                    <td>${p.max_score}</td>
                 `;
                 tbody.appendChild(row);
-            }});
-        }}
+            });
+        }
 
-        function setupViewer() {{
+        function setupViewer() {
             const navContainer = document.getElementById('tab-navigation');
             const contentContainer = document.getElementById('tab-contents');
+            let firstTabId = '';
 
             renderLeaderboard(viewerData.participants);
 
-            const allParticipants = [{{"name": "Actual Results", "picks": viewerData.actual_results, "score": null}}, ...viewerData.participants];
+            const allParticipants = [{"name": "Actual Results", "picks": viewerData.actual_results, "score": null}, ...viewerData.participants];
 
-            allParticipants.forEach((p, index) => {{
+            allParticipants.forEach((p, index) => {
                 const nameKey = p.name.replace(/\\s+/g, '-');
-                const tabId = `${{nameKey}}-tab`;
+                const tabId = `${nameKey}-tab`;
+
+                if (index === 0) {
+                    firstTabId = tabId;
+                }
 
                 const btn = document.createElement('button');
                 btn.className = 'tab-button';
@@ -451,37 +501,44 @@ def generate_viewer_html(viewer_data, output_path):
 
                 const tab = document.createElement('div');
                 tab.id = tabId;
-                tab.className = 'tab-content';
+                tab.className = 'tab-content'; // Initially hidden by default
 
-                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${{p.score}} pts | Max Possible: ${{p.max_score}} pts</h3>` : '';
+                let scoreHtml = p.name !== "Actual Results" ? `<h3>Total Score: ${p.score} pts | Max Possible: ${p.max_score} pts</h3>` : '';
 
                 tab.innerHTML = scoreHtml + `
-                    <h2>Men's Singles</h2><div id="${{nameKey}}-mens-bracket" class="bracket-container"></div>
-                    <h2>Women's Singles</h2><div id="${{nameKey}}-womens-bracket" class="bracket-container"></div>`;
+                    <h2>Men's Singles</h2><div id="${nameKey}-mens-bracket" class="bracket-container"></div>
+                    <h2>Women's Singles</h2><div id="${nameKey}-womens-bracket" class="bracket-container"></div>`;
                 contentContainer.appendChild(tab);
 
-                createBracketDisplay(tab.querySelector(`#${{nameKey}}-mens-bracket`), 'mens', p.picks);
-                createBracketDisplay(tab.querySelector(`#${{nameKey}}-womens-bracket`), 'womens', p.picks);
+                const mensBracketContainer = tab.querySelector(`#${nameKey}-mens-bracket`);
+                const womensBracketContainer = tab.querySelector(`#${nameKey}-womens-bracket`);
 
-                if (index === 0) {{
-                    btn.classList.add('active');
-                    tab.style.display = 'block';
-                }}
-            }});
+                createBracketDisplay(mensBracketContainer, 'mens', p.picks);
+                createBracketDisplay(womensBracketContainer, 'womens', p.picks);
+            });
 
             const bottomNavContainer = document.getElementById('tab-navigation-bottom');
             bottomNavContainer.innerHTML = navContainer.innerHTML;
-            bottomNavContainer.querySelectorAll('.tab-button').forEach(btn => {{
+            bottomNavContainer.querySelectorAll('.tab-button').forEach(btn => {
                 const tabId = btn.dataset.tabId;
                 btn.onclick = () => openTab(tabId);
-            }});
-        }}
+            });
+
+            // After all tabs are created, open the first one.
+            // This will make it visible and trigger the default scroll.
+            if (firstTabId) {
+                openTab(firstTabId);
+            }
+        }
 
         setupViewer();
     </script>
 </body>
 </html>
-    """
+"""
+    # Combine the parts: HTML part 1, the JSON data, a semicolon for JS, and HTML part 2.
+    html_template = html_part1 + json.dumps(viewer_data, indent=4) + ";" + html_part2
+
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_template)
     print(f"Successfully generated viewer HTML at: {output_path}")
