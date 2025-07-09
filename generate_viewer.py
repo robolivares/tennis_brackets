@@ -310,6 +310,15 @@ def generate_viewer_html(viewer_data, output_path):
         .champion-box {{ display: flex; flex-direction: column; align-items: center; justify-content: center; }}
         .champion-trophy {{ font-size: 4em; color: #d4af37; line-height: 1; }}
         .champion-name {{ font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); min-height: 30px; text-align: center; }}
+        footer {{
+            text-align: center;
+            margin-top: 3em;
+            padding-top: 1.5em;
+            border-top: 1px solid #ccc;
+            font-size: 1em;
+            font-weight: bold;
+            color: #555;
+        }}
     </style>
 </head>
 <body>
@@ -319,6 +328,11 @@ def generate_viewer_html(viewer_data, output_path):
     <div id="tab-navigation" class="tab-nav"></div>
     <div id="tab-contents"></div>
     <div id="tab-navigation-bottom" class="tab-nav" style="margin-top: 2em; border-top: 2px solid #ddd; padding-top: 1em;"></div>
+
+    <footer>
+        This bracket was served up by Rob Olivares.
+    </footer>
+
     <script>
         const viewerData =
 """
