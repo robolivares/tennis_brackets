@@ -23,6 +23,13 @@ mens,r16,mens-r16-match-4,Taylor Fritz
 mens,r16,mens-r16-match-5,Karen Khachanov
 mens,r16,mens-r16-match-6,Cameron Norrie
 mens,r16,mens-r16-match-7,Carlos Alcaraz
+mens,qf,mens-qf-match-0,Jannik Sinner
+mens,qf,mens-qf-match-1,Novak Djokovic
+mens,qf,mens-qf-match-2,Taylor Fritz
+mens,qf,mens-qf-match-3,Carlos Alcaraz
+mens,sf,mens-sf-match-0,Jannik Sinner
+mens,sf,mens-sf-match-1,Carlos Alcaraz
+mens,f,mens-f-match-0,Jannik Sinner
 womens,r32,womens-r32-match-0,Aryna Sabalenka
 womens,r32,womens-r32-match-1,Elise Mertens
 womens,r32,womens-r32-match-2,Solana Sierra
@@ -40,10 +47,17 @@ womens,r32,womens-r32-match-13,Clara Tauson
 womens,r32,womens-r32-match-14,Liudmila Samsonova
 womens,r32,womens-r32-match-15,Jessica Bouzas Maneiro
 womens,r16,womens-r16-match-0,Aryna Sabalenka
-womens,r16,womens-r16-match-1,A. Pavlyuchenkova
+womens,r16,womens-r16-match-1,Laura Siegemund
 womens,r16,womens-r16-match-2,Amanda Anisimova
-womens,r16,womens-r16-match-3,Laura Siegemund
+womens,r16,womens-r16-match-3,A. Pavlyuchenkova
 womens,r16,womens-r16-match-4,Mirra Andreeva
 womens,r16,womens-r16-match-5,Belinda Bencic
-womens,r16,womens-r16-match-6,Emma Navarro
+womens,r16,womens-r16-match-6,Iga Swiatek
 womens,r16,womens-r16-match-7,Liudmila Samsonova
+womens,qf,womens-qf-match-0,Aryna Sabalenka
+womens,qf,womens-qf-match-1,Amanda Anisimova
+womens,qf,womens-qf-match-2,Belinda Bencic
+womens,qf,womens-qf-match-3,Iga Swiatek
+womens,sf,womens-sf-match-0,Amanda Anisimova
+womens,sf,womens-sf-match-1,Iga Swiatek
+womens,f,womens-f-match-0,Iga Swiatek

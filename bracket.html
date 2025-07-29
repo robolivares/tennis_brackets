@@ -18,6 +18,7 @@
         h2 { font-size: 2em; margin-top: 1.5em; border-bottom: 3px solid #4A0072; padding-bottom: 0.5em; }
         .instructions { max-width: 600px; margin: 0 auto 2em auto; padding: 1em; background-color: #e6f3ff; border: 1px solid #b3d9ff; border-radius: 8px; text-align: left; }
         .instructions ol { padding-left: 25px; margin: 0; }
+        .instructions li { margin-bottom: 0.5em; }
 
         .bracket-container { display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; -webkit-overflow-scrolling: touch; }
         .round { display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }
@@ -33,6 +34,7 @@
         .player { display: flex; align-items: center; margin: 8px 0; border-radius: 5px; transition: background-color 0.2s; }
         .interactive .player { cursor: pointer; }
         .interactive .player:hover { background-color: #f0f8ff; }
+        .static .player { cursor: default; }
 
         .player-seed { font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }
         .player-name { flex-grow: 1; font-size: 1em; color: #333; }
@@ -62,15 +64,12 @@
 <body>
     <div id="interactive-view">
         <h1>Tournament Bracket Challenge</h1>
-
-        <div id="dev-controls">
-            <!-- Dev buttons will be injected here -->
-        </div>
-
+        <div id="dev-controls"></div>
         <div class="instructions">
           <ol>
             <li>Fill in your bracket by clicking your predicted winner for each match.</li>
             <li>Once finished, click the "Lock In & Review" button to see a summary of your picks.</li>
+            <li><strong>Scoring:</strong> Points per correct pick are: Round of 32 (2), Round of 16 (3), Quarterfinals (5), Semifinals (8), Final (13).</li>
           </ol>
         </div>
 
@@ -436,7 +435,7 @@
                 roundDiv.appendChild(roundTitle);
                 const matchupWrapper = document.createElement('div');
                 matchupWrapper.classList.add('matchup-wrapper');
-                const numMatches = initialData.length / Math.pow(2, roundIndex);
+                const numMatches = 16 / Math.pow(2, roundIndex);
                 for (let i = 0; i < numMatches; i++) {
                     const matchupDiv = document.createElement('div');
                     matchupDiv.classList.add('matchup');
@@ -464,49 +463,51 @@
             championContainer.innerHTML = `<div class="champion-box"><div class="champion-trophy">&#127942;</div><div id="${category}-champion-name" class="champion-name"></div></div>`;
             bracketContainer.appendChild(championContainer);
 
-            addEventListeners(category);
+            addEventListeners(containerId);
         }
 
-        function addEventListeners(category) {
-            document.getElementById(`${category}-bracket`).addEventListener('change', (event) => {
+        function addEventListeners(containerId) {
+            document.getElementById(`${containerId}`).addEventListener('change', (event) => {
                 if (event.target.type === 'radio') {
-                    const selectedName = event.target.value;
                     const selectedLabel = event.target.closest('.player');
-                    const selectedSeed = selectedLabel.querySelector('.player-seed').textContent;
-                    const nameParts = event.target.name.split('-');
-                    const roundKey = nameParts[1];
-                    const matchIndex = parseInt(nameParts[3], 10);
-                    document.getElementById(event.target.name).querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
+                    selectedLabel.parentElement.querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
                     selectedLabel.querySelector('.player-name').classList.add('winner');
-                    updateNextRound(category, roundKey, matchIndex, {seed: selectedSeed, name: selectedName});
-                    if(roundKey === 'f'){
-                        document.getElementById(`${category}-champion-name`).textContent = selectedName;
-                    }
+                    updateNextRound(event.target.name, {
+                        seed: selectedLabel.querySelector('.player-seed').textContent,
+                        name: event.target.value
+                    });
                 }
             });
         }
 
-        function updateNextRound(category, roundKey, matchIndex, winner) {
+        function updateNextRound(matchupId, winner) {
+            const parts = matchupId.split('-');
+            const category = parts[0];
+            const roundKey = parts[1];
+            const matchIndex = parseInt(parts[3], 10);
+
             const currentRoundIndex = rounds.findIndex(r => r.key === roundKey);
-            if (currentRoundIndex >= rounds.length - 1) return;
+            if (currentRoundIndex >= rounds.length - 1) {
+                document.getElementById(`${category}-champion-name`).textContent = winner.name;
+                return;
+            }
+
             const nextRound = rounds[currentRoundIndex + 1];
             const nextMatchIndex = Math.floor(matchIndex / 2);
             const playerSlot = matchIndex % 2;
             const nextMatchupId = `${category}-${nextRound.key}-match-${nextMatchIndex}`;
             const nextMatchupDiv = document.getElementById(nextMatchupId);
+
             if (nextMatchupDiv) {
                 const playerLabel = nextMatchupDiv.querySelectorAll('.player')[playerSlot];
-                const playerInput = playerLabel.querySelector('input');
-                const playerNameSpan = playerLabel.querySelector('.player-name');
-                const playerSeedSpan = playerLabel.querySelector('.player-seed');
-                if (nextMatchupDiv.querySelector('input:checked')?.value === playerInput.value) {
-                    updateNextRound(category, nextRound.key, nextMatchIndex, {seed:'', name:'To Be Decided'});
-                     if(nextRound.key === 'f'){ document.getElementById(`${category}-champion-name`).textContent = ''; }
+                if (nextMatchupDiv.querySelector('input:checked')?.value === playerLabel.querySelector('input').value) {
+                     updateNextRound(nextMatchupId, {seed:'', name:'To Be Decided'});
                 }
-                playerInput.value = winner.name;
-                playerNameSpan.textContent = winner.name;
-                playerSeedSpan.textContent = winner.seed;
-                playerNameSpan.classList.toggle('tbd', winner.name === 'To Be Decided');
+                playerLabel.querySelector('input').value = winner.name;
+                playerLabel.querySelector('.player-name').textContent = winner.name;
+                playerLabel.querySelector('.player-seed').textContent = winner.seed;
+                playerLabel.querySelector('.player-name').classList.toggle('tbd', winner.name === 'To Be Decided');
+
                 nextMatchupDiv.querySelectorAll('input').forEach(i => i.checked = false);
                 nextMatchupDiv.querySelectorAll('.player-name').forEach(el => el.classList.remove('winner'));
             }
@@ -515,7 +516,10 @@
         function lockInBracket() {
             let allPicksMade = true;
             document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {
-                if (!matchup.querySelector('input:checked')) { allPicksMade = false; }
+                const firstPlayer = matchup.querySelector('.player:first-child .player-name');
+                if (firstPlayer && firstPlayer.textContent !== 'To Be Decided' && !matchup.querySelector('input:checked')) {
+                    allPicksMade = false;
+                }
             });
             if (!allPicksMade) { alert("Please complete the entire bracket before continuing!"); return; }
 
@@ -534,11 +538,8 @@
 
             staticViewContent.querySelector('.instructions').remove();
             staticViewContent.querySelector('#lock-in-btn').remove();
-
             const devControlsInClone = staticViewContent.querySelector('#dev-controls');
-            if (devControlsInClone) {
-                devControlsInClone.remove();
-            }
+            if (devControlsInClone) devControlsInClone.remove();
 
             const staticBrackets = staticViewContent.querySelectorAll('.bracket-container');
             staticBrackets.forEach(bracket => {
@@ -584,29 +585,25 @@
 
         function submitToGoogleForm() {
             let csvData = "Category,Round,MatchID,PredictedWinner\n";
-            document.querySelectorAll('#interactive-view .matchup').forEach(matchup => {
-                const checkedRadio = matchup.querySelector('input:checked');
-                const [category, roundKey] = matchup.id.split('-');
-                csvData += `${category},${roundKey},${matchup.id},${checkedRadio ? checkedRadio.value : "NONE"}\n`;
+            document.querySelectorAll('#interactive-view .matchup input:checked').forEach(radio => {
+                 const [category, roundKey] = radio.name.split('-');
+                 csvData += `${category},${roundKey},${radio.name},${radio.value}\n`;
             });
 
             const hiddenForm = document.createElement('form');
             hiddenForm.action = googleFormConfig.action_url;
             hiddenForm.method = 'POST';
             hiddenForm.target = '_blank';
-
             const nameInput = document.createElement('input');
             nameInput.type = 'hidden';
             nameInput.name = googleFormConfig.name_entry;
             nameInput.value = participantName;
             hiddenForm.appendChild(nameInput);
-
             const dataInput = document.createElement('input');
             dataInput.type = 'hidden';
             dataInput.name = googleFormConfig.data_entry;
             dataInput.value = csvData;
             hiddenForm.appendChild(dataInput);
-
             document.body.appendChild(hiddenForm);
             hiddenForm.submit();
             document.body.removeChild(hiddenForm);
@@ -614,22 +611,13 @@
 
         function autoFillRound(roundKey) {
             ['mens', 'womens'].forEach(category => {
-                const matchups = document.querySelectorAll(`#interactive-view #${category}-${roundKey} .matchup`);
-                matchups.forEach((matchup) => {
-                    const alreadySelected = matchup.querySelector('input[type="radio"]:checked');
-                    if (alreadySelected) return;
-
-                    const players = matchup.querySelectorAll('label.player');
-                    if (players.length === 2) {
-                        const randomIndex = Math.floor(Math.random() * 2);
-                        const selectedLabel = players[randomIndex];
-                        const selectedRadio = selectedLabel.querySelector('input[type="radio"]');
-
-                        if (selectedRadio && selectedRadio.value) {
-                            selectedRadio.checked = true;
-                            const changeEvent = new Event('change', { bubbles: true });
-                            selectedRadio.dispatchEvent(changeEvent);
-                        }
+                document.querySelectorAll(`#${category}-bracket [id*="-${roundKey}-"]`).forEach(matchup => {
+                    if (matchup.querySelector('input:checked')) return;
+                    const players = matchup.querySelectorAll('.player input');
+                    if (players.length === 2 && players[0].value) {
+                        const radioToClick = players[Math.floor(Math.random() * 2)];
+                        radioToClick.checked = true;
+                        radioToClick.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 });
             });
