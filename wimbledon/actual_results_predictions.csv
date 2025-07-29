@@ -1,0 +1,49 @@
+Category,Round,MatchID,PredictedWinner
+mens,r32,mens-r32-match-0,Jannik Sinner
+mens,r32,mens-r32-match-1,Grigor Dimitrov
+mens,r32,mens-r32-match-2,Shelton/Hijikata
+mens,r32,mens-r32-match-3,Lorenzo Sonego
+mens,r32,mens-r32-match-4,Marin Cilic
+mens,r32,mens-r32-match-5,Fabio Cobolli
+mens,r32,mens-r32-match-6,Alex de Minaur
+mens,r32,mens-r32-match-7,Novak Djokovic
+mens,r32,mens-r32-match-8,Taylor Fritz
+mens,r32,mens-r32-match-9,Jordan Thompson
+mens,r32,mens-r32-match-10,Karen Khachanov
+mens,r32,mens-r32-match-11,K Majchrzak
+mens,r32,mens-r32-match-12,Nicolas Jarry
+mens,r32,mens-r32-match-13,Cameron Norrie
+mens,r32,mens-r32-match-14,Andrey Rublev
+mens,r32,mens-r32-match-15,Carlos Alcaraz
+mens,r16,mens-r16-match-0,Jannik Sinner
+mens,r16,mens-r16-match-1,Shelton/Hijikata
+mens,r16,mens-r16-match-2,Fabio Cobolli
+mens,r16,mens-r16-match-3,Novak Djokovic
+mens,r16,mens-r16-match-4,Taylor Fritz
+mens,r16,mens-r16-match-5,Karen Khachanov
+mens,r16,mens-r16-match-6,Cameron Norrie
+mens,r16,mens-r16-match-7,Carlos Alcaraz
+womens,r32,womens-r32-match-0,Aryna Sabalenka
+womens,r32,womens-r32-match-1,Elise Mertens
+womens,r32,womens-r32-match-2,Solana Sierra
+womens,r32,womens-r32-match-3,Laura Siegemund
+womens,r32,womens-r32-match-4,Linda Noskova
+womens,r32,womens-r32-match-5,Amanda Anisimova
+womens,r32,womens-r32-match-6,Sonay Kartal
+womens,r32,womens-r32-match-7,A. Pavlyuchenkova
+womens,r32,womens-r32-match-8,Mirra Andreeva
+womens,r32,womens-r32-match-9,Emma Navarro
+womens,r32,womens-r32-match-10,Ekaterina Alexandrova
+womens,r32,womens-r32-match-11,Belinda Bencic
+womens,r32,womens-r32-match-12,Iga Swiatek
+womens,r32,womens-r32-match-13,Clara Tauson
+womens,r32,womens-r32-match-14,Liudmila Samsonova
+womens,r32,womens-r32-match-15,Jessica Bouzas Maneiro
+womens,r16,womens-r16-match-0,Aryna Sabalenka
+womens,r16,womens-r16-match-1,A. Pavlyuchenkova
+womens,r16,womens-r16-match-2,Amanda Anisimova
+womens,r16,womens-r16-match-3,Laura Siegemund
+womens,r16,womens-r16-match-4,Mirra Andreeva
+womens,r16,womens-r16-match-5,Belinda Bencic
+womens,r16,womens-r16-match-6,Emma Navarro
+womens,r16,womens-r16-match-7,Liudmila Samsonova
