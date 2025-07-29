@@ -560,6 +560,29 @@ def generate_viewer_html(viewer_data, output_path):
         f.write(html_template)
     print(f"Successfully generated viewer HTML at: {output_path}")
 
+def export_scores_to_csv(participants, output_path):
+    """
+    Exports the participant scores to a CSV file, sorted alphabetically by name.
+    """
+    if not participants:
+        print("No participant data to export.")
+        return
+
+    # Sort participants alphabetically by name
+    sorted_participants = sorted(participants, key=lambda p: p['name'])
+
+    try:
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            # Write the header row
+            writer.writerow(['Name', 'Current Score'])
+            # Write the data for each participant
+            for p in sorted_participants:
+                writer.writerow([p['name'], p['score']])
+        print(f"Successfully exported scores to: {output_path}")
+    except Exception as e:
+        print(f"Error exporting scores to CSV: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a master viewer HTML for tournament brackets.")
@@ -579,6 +602,12 @@ if __name__ == "__main__":
         action='store_true',
         help="Enable debug printing to the console."
     )
+    # New argument for CSV output
+    parser.add_argument(
+        '--output',
+        metavar='FILENAME.CSV',
+        help="Optional: Export scores to a CSV file, sorted alphabetically."
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.board):
@@ -586,7 +615,12 @@ if __name__ == "__main__":
     else:
         viewer_data = create_viewer_data(args.board, args.entrants, args.debug)
         if viewer_data:
+            # Generate the HTML viewer file
             output_filename = "index.html"
             output_filepath = os.path.join(args.board, output_filename)
             generate_viewer_html(viewer_data, output_filepath)
+
+            # Check if the --output flag was used and export to CSV if so
+            if args.output:
+                export_scores_to_csv(viewer_data['participants'], args.output)
 
