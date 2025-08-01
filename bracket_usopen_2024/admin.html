@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bracket Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-gray-200">
+
+    <div class="container mx-auto p-4 max-w-4xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 my-6">Bracket Admin Panel</h1>
+
+        <!-- Password View -->
+        <div id="password-view" class="bg-white p-8 rounded-lg shadow-md text-center">
+            <h2 class="text-2xl font-bold mb-4">Enter Admin Password</h2>
+            <input type="password" id="password-input" class="w-full max-w-xs mx-auto px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600" placeholder="Password">
+            <button id="login-btn" class="block w-full max-w-xs mx-auto bg-purple-700 text-white font-bold py-3 mt-4 rounded-lg hover:bg-purple-800 transition-colors">
+                Login
+            </button>
+            <p id="error-message" class="text-red-500 mt-4 h-4"></p>
+        </div>
+
+        <!-- Admin Content View -->
+        <div id="admin-content" class="hidden">
+            <!-- This area will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- Configuration ---
+        const ADMIN_PASSWORD = "your-secret-password"; // IMPORTANT: Change this password
+
+        // --- Global Variables ---
+        let db, auth;
+        let tournamentData = null;
+        let actualResults = {};
+        let appConfig;
+
+        // --- DOM Elements ---
+        const passwordView = document.getElementById('password-view');
+        const adminContent = document.getElementById('admin-content');
+        const passwordInput = document.getElementById('password-input');
+        const loginBtn = document.getElementById('login-btn');
+        const errorMessage = document.getElementById('error-message');
+
+        // --- Event Listeners ---
+        loginBtn.addEventListener('click', handleLogin);
+        passwordInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') handleLogin();
+        });
+
+        // --- Core Functions ---
+        async function handleLogin() {
+            if (passwordInput.value !== ADMIN_PASSWORD) {
+                errorMessage.textContent = "Incorrect password.";
+                return;
+            }
+
+            errorMessage.textContent = 'Logging in...';
+            
+            try {
+                // Dynamically import config to catch errors
+                const configModule = await import('./app-config.js');
+                appConfig = configModule.appConfig;
+
+                // Initialize Firebase
+                const app = initializeApp(configModule.firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                await signInAnonymously(auth);
+                
+                // Load data and show the main view
+                await loadData();
+                showAdminView();
+
+            } catch (error) {
+                console.error("Login or Initialization Failed:", error);
+                errorMessage.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function showAdminView() {
+            passwordView.classList.add('hidden');
+            adminContent.classList.remove('hidden');
+            renderAllForms();
+        }
+
+        async function loadData() {
+            try {
+                // 1. Fetch the tournament structure
+                const response = await fetch(`tournament_data.json?v=${new Date().getTime()}`);
+                if (!response.ok) throw new Error('Could not fetch tournament_data.json.');
+                tournamentData = await response.json();
+
+                // 2. Fetch existing results from Firestore
+                const resultsDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults");
+                const docSnap = await getDoc(resultsDocRef);
+                if (docSnap.exists()) {
+                    actualResults = docSnap.data().winners || {};
+                }
+            } catch (error) {
+                // Display error inside the admin content area if data loading fails
+                adminContent.innerHTML = `<p class="text-red-500 text-center text-lg p-8 bg-white rounded-lg shadow-md">${error.message}</p>`;
+                adminContent.classList.remove('hidden'); // Ensure the error is visible
+                throw error; // Stop further execution
+            }
+        }
+
+        function renderAllForms() {
+            adminContent.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-4 text-center">Men's Results</h2>
+                        <div id="mens-results" class="space-y-4 bg-white p-6 rounded-lg shadow-md"></div>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold mb-4 text-center">Women's Results</h2>
+                        <div id="womens-results" class="space-y-4 bg-white p-6 rounded-lg shadow-md"></div>
+                    </div>
+                </div>
+                <div class="text-center mt-8">
+                    <button id="save-results-btn" class="bg-green-600 text-white font-bold py-4 px-10 rounded-lg hover:bg-green-700 transition-colors text-xl">
+                        Save All Results
+                    </button>
+                    <p id="save-status" class="mt-4 h-6 text-lg"></p>
+                </div>
+            `;
+
+            document.getElementById('mens-results').innerHTML = createFormHTML(tournamentData.mens_draw, 'mens');
+            document.getElementById('womens-results').innerHTML = createFormHTML(tournamentData.womens_draw, 'womens');
+            
+            // Add event listeners after rendering
+            document.getElementById('save-results-btn').addEventListener('click', saveResults);
+            adminContent.querySelectorAll('select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const matchId = e.target.id;
+                    const winner = e.target.value;
+                    if (winner) {
+                        actualResults[matchId] = winner;
+                    } else {
+                        delete actualResults[matchId];
+                    }
+                    // Re-render to update dependent dropdowns
+                    renderAllForms();
+                });
+            });
+        }
+
+        function createFormHTML(drawData, category) {
+            let html = '';
+            const rounds = ["r32", "r16", "qf", "sf", "f"];
+            const roundNames = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
+            
+            let previousRoundWinners = {}; // Store winners from the previous round
+
+            rounds.forEach((roundKey, roundIndex) => {
+                html += `<h3 class="text-lg font-bold mt-4 border-b pb-2">${roundNames[roundIndex]}</h3>`;
+                const numMatches = 16 / Math.pow(2, roundIndex);
+
+                for (let i = 0; i < numMatches; i++) {
+                    const matchId = `${category}-${roundKey}-match-${i}`;
+                    let p1 = 'TBD', p2 = 'TBD';
+
+                    if (roundIndex === 0) {
+                        p1 = drawData[i].players[0][1];
+                        p2 = drawData[i].players[1][1];
+                    } else {
+                        const prevRoundKey = rounds[roundIndex - 1];
+                        p1 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2}`] || 'TBD';
+                        p2 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2 + 1}`] || 'TBD';
+                    }
+                    
+                    const selectedWinner = actualResults[matchId];
+                    if(selectedWinner) {
+                        previousRoundWinners[matchId] = selectedWinner;
+                    }
+
+                    const isDisabled = p1 === 'TBD' || p2 === 'TBD';
+
+                    html += `
+                        <div class="p-2 border-b">
+                            <label class="block text-sm font-medium text-gray-600">${p1} vs ${p2}</label>
+                            <select id="${matchId}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" ${isDisabled ? 'disabled' : ''}>
+                                <option value="">-- Select Winner --</option>
+                                <option value="${p1}" ${selectedWinner === p1 ? 'selected' : ''}>${p1}</option>
+                                <option value="${p2}" ${selectedWinner === p2 ? 'selected' : ''}>${p2}</option>
+                            </select>
+                        </div>
+                    `;
+                }
+            });
+            return html;
+        }
+
+        async function saveResults() {
+            const saveStatus = document.getElementById('save-status');
+            saveStatus.textContent = "Saving...";
+            saveStatus.classList.remove('text-green-600', 'text-red-500');
+
+            try {
+                const resultsDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults");
+                await setDoc(resultsDocRef, { winners: actualResults });
+                saveStatus.textContent = "Results saved successfully!";
+                saveStatus.classList.add('text-green-600');
+            } catch (error) {
+                console.error("Save Error:", error);
+                saveStatus.textContent = "Error saving results. Check console.";
+                saveStatus.classList.add('text-red-500');
+            } finally {
+                setTimeout(() => saveStatus.textContent = '', 4000);
+            }
+        }
+    </script>
+</body>
+</html>
+
