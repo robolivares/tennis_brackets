@@ -29,10 +29,13 @@
         .leaderboard th, .leaderboard td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
         .leaderboard th { font-weight: bold; color: #4A0072; }
         .leaderboard tr:last-child td { border-bottom: none; }
-        .viewer-bracket { border: 2px solid #4A0072; margin-top: 2rem; border-radius: 8px; }
+        .viewer-bracket { border: 2px solid #4A0072; margin-top: 2rem; border-radius: 8px; padding-bottom: 1rem; }
         .player-name.correct-pick { color: #059669; font-weight: bold; }
         .player-name.incorrect-pick { color: #dc2626; text-decoration: line-through; }
         .actual-winner-note { position: absolute; bottom: -22px; left: 0; right: 0; text-align: center; font-size: 0.8em; color: #059669; font-weight: bold; }
+        .participant-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 2em auto; max-width: 1200px; }
+        .participant-btn { background-color: #fff; color: #4A0072; border: 1px solid #4A0072; padding: 0.8rem 1rem; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s; font-weight: bold; text-align: center; }
+        .participant-btn.active { background-color: #4A0072; color: white; }
 
         /* Picker Toggle Styles */
         .view-toggle-btn { background-color: #e5e7eb; color: #4b5563; border: 1px solid #d1d5db; transition: background-color 0.2s, color 0.2s; }
@@ -71,7 +74,9 @@
         let viewerData = null;
         let unsubscribeUser = null;
         let unsubscribeViewer = null;
-        let activePickerView = 'bracket'; // 'bracket' or 'list'
+        let activePickerView = 'bracket';
+        let currentlyViewedParticipantIndex = -1; // -1 for "Actual Results"
+        let isInitialView = true;
 
         const mainContent = document.getElementById('main-content');
         const statusText = document.getElementById('status-text');
@@ -84,11 +89,9 @@
                 const configModule = await import('./app-config.js');
                 appConfig = configModule.appConfig;
                 firebaseConfig = configModule.firebaseConfig;
-
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-
                 onAuthStateChanged(auth, handleAuthStateChange);
             } catch (error) {
                 statusText.textContent = `Fatal Error: ${error.message}`;
@@ -98,15 +101,12 @@
         async function handleAuthStateChange(user) {
             if (unsubscribeUser) unsubscribeUser();
             if (unsubscribeViewer) unsubscribeViewer();
-
             if (user) {
                 currentUserId = user.uid;
                 try {
                     await loadTournamentData();
                     listenToUserData();
-                    if (appConfig.VIEWER_MODE_ENABLED) {
-                        listenToViewerData();
-                    }
+                    if (appConfig.VIEWER_MODE_ENABLED) listenToViewerData();
                 } catch (error) {
                     statusText.textContent = `Error: ${error.message}`;
                 }
@@ -127,6 +127,17 @@
             const viewerDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "state", "viewerData");
             unsubscribeViewer = onSnapshot(viewerDocRef, (docSnap) => {
                 viewerData = docSnap.exists() ? docSnap.data() : null;
+                if (isInitialView && viewerData) {
+                    // Default to showing "Actual Results" unless the logged-in user is a participant
+                    currentlyViewedParticipantIndex = -1; 
+                    if (userProfile) {
+                        const userIndex = viewerData.participants.findIndex(p => p.fullName === userProfile.fullName);
+                        if (userIndex !== -1) {
+                            currentlyViewedParticipantIndex = userIndex;
+                        }
+                    }
+                    isInitialView = false;
+                }
                 updateUI();
             });
         }
@@ -139,11 +150,17 @@
         }
 
         function updateUI() {
-            if (!userProfile) {
+            // Don't render anything until the user's profile is loaded
+            if (!userProfile && !auth.currentUser) {
+                renderLoginView();
+                return;
+            } else if (!userProfile && auth.currentUser) {
+                // This state can happen briefly after login before the doc is created.
+                // Or if a user is logged in but has no profile.
                 renderLoginView();
                 return;
             }
-            
+
             userInfoDisplay.classList.remove('hidden');
             document.getElementById('display-nickname').textContent = userProfile.nickname;
             document.getElementById('display-fullname').textContent = `(${userProfile.fullName})`;
@@ -160,8 +177,90 @@
                 renderAppView();
             }
         }
+        
+        function renderViewerMode() {
+            statusText.textContent = "Viewing results.";
+            
+            const displayParticipants = [
+                { name: "Actual Results", picks: viewerData.actual_results, score: null },
+                ...viewerData.participants
+            ];
 
-        // --- RENDER FUNCTIONS ---
+            const activeDisplayIndex = currentlyViewedParticipantIndex + 1;
+            const participantToView = displayParticipants[activeDisplayIndex];
+
+            const createParticipantSelectorHTML = (position) => `
+                <div id="participant-selector-${position}" class="participant-selector">
+                    ${displayParticipants.map((p, index) => `
+                        <button data-index="${index - 1}" class="participant-btn ${index === activeDisplayIndex ? 'active' : ''}">
+                            ${p.name}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+
+            let html = `
+                <div class="leaderboard">
+                    <h2 class="text-3xl font-bold text-center mb-6 text-purple-900">Leaderboard</h2>
+                    <table class="w-full text-lg">
+                        <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Max Potential</th></tr></thead>
+                        <tbody>
+                            ${viewerData.participants.map((p, index) => `
+                                <tr class="cursor-pointer hover:bg-gray-100" data-index="${index}">
+                                    <td class="font-bold">${p.rank}</td>
+                                    <td>${p.name}</td>
+                                    <td>${p.score}</td>
+                                    <td>${p.max_score}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            html += createParticipantSelectorHTML('top');
+
+            const title = participantToView.name === 'Actual Results'
+                ? `<h2 class="text-2xl font-bold text-center my-4">Actual Results</h2>`
+                : `<h2 class="text-2xl font-bold text-center my-4">${participantToView.name}'s Bracket (Score: ${participantToView.score})</h2>`;
+
+            html += `
+                <div id="bracket-display-area" class="viewer-bracket">
+                    ${title}
+                    <div class="mb-8">
+                        <h3 class="text-xl font-bold text-center mb-4">Men's Bracket</h3>
+                        <div id="mens-bracket-viewer" class="bracket-container"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-center mb-4">Women's Bracket</h3>
+                        <div id="womens-bracket-viewer" class="bracket-container"></div>
+                    </div>
+                </div>
+            `;
+
+            html += createParticipantSelectorHTML('bottom');
+            mainContent.innerHTML = html;
+
+            createReadOnlyBracket(`mens-bracket-viewer`, 'mens', participantToView.picks);
+            createReadOnlyBracket(`womens-bracket-viewer`, 'womens', participantToView.picks);
+
+            document.querySelectorAll('.participant-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    currentlyViewedParticipantIndex = parseInt(e.target.dataset.index, 10);
+                    renderViewerMode();
+                });
+            });
+            document.querySelectorAll('.leaderboard tr[data-index]').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    currentlyViewedParticipantIndex = parseInt(e.currentTarget.dataset.index, 10);
+                    renderViewerMode();
+                    const bracketElement = document.getElementById('bracket-display-area');
+                    if (bracketElement) bracketElement.scrollIntoView({ behavior: 'smooth' });
+                });
+            });
+        }
+        
+        // --- Full, correct render functions are included below ---
 
         function renderLoginView() {
             userInfoDisplay.classList.add('hidden');
@@ -264,8 +363,8 @@
                 select.addEventListener('change', (e) => {
                     const matchId = e.target.id;
                     const selectedOption = e.target.options[e.target.selectedIndex];
-                    if (!selectedOption.value) { // Handle "-- Select Winner --"
-                        handlePick(matchId, null); // Pass null to indicate clearing the pick
+                    if (!selectedOption.value) {
+                        handlePick(matchId, null);
                         return;
                     }
                     const winnerName = selectedOption.value;
@@ -321,19 +420,74 @@
             mainContent.innerHTML = `<div class="max-w-2xl mx-auto text-center bg-white p-8 rounded-lg shadow-lg"><h2 class="text-3xl font-bold text-green-700">Bracket Submitted!</h2><p class="mt-4 text-lg text-gray-600">Your picks are locked in. Good luck!</p></div>`;
         }
 
-        function renderViewerMode() {
-            statusText.textContent = "Viewing results.";
-            let html = `<div class="leaderboard">...</div>`; // Omitted for brevity
-            viewerData.participants.forEach(participant => { html += `<div class="viewer-bracket mt-12">...</div>`; }); // Omitted for brevity
-            mainContent.innerHTML = html;
-            viewerData.participants.forEach(participant => {
-                createReadOnlyBracket(`mens-bracket-${participant.name}`, 'mens', participant.picks);
-                createReadOnlyBracket(`womens-bracket-${participant.name}`, 'womens', participant.picks);
-            });
-        }
-
         function createReadOnlyBracket(containerId, category, participantPicks) {
-            // Unchanged from previous version
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const actualWinners = viewerData.actual_results || {};
+
+            rounds.forEach((round, roundIndex) => {
+                const roundDiv = document.createElement('div');
+                roundDiv.className = 'round';
+                roundDiv.innerHTML = `<div class="round-title">${round.name}</div>`;
+                const matchupWrapper = document.createElement('div');
+                matchupWrapper.className = 'matchup-wrapper';
+
+                const numMatches = 16 / Math.pow(2, roundIndex);
+                for (let i = 0; i < numMatches; i++) {
+                    const matchId = `${category}-${round.key}-match-${i}`;
+                    const matchupDiv = document.createElement('div');
+                    matchupDiv.className = 'matchup';
+                    
+                    let p1 = ['', 'TBD'], p2 = ['', 'TBD'];
+
+                    if (roundIndex === 0) {
+                        p1 = tournamentData[`${category}_draw`][i].players[0];
+                        p2 = tournamentData[`${category}_draw`][i].players[1];
+                    } else {
+                        const prevRoundKey = rounds[roundIndex - 1].key;
+                        const p1SourceId = `${category}-${prevRoundKey}-match-${i * 2}`;
+                        const p2SourceId = `${category}-${prevRoundKey}-match-${i * 2 + 1}`;
+                        
+                        const p1Winner = participantPicks[p1SourceId];
+                        if (p1Winner) p1 = Array.isArray(p1Winner) ? p1Winner : [viewerData.seed_map[category][p1Winner] || '', p1Winner];
+                        
+                        const p2Winner = participantPicks[p2SourceId];
+                        if (p2Winner) p2 = Array.isArray(p2Winner) ? p2Winner : [viewerData.seed_map[category][p2Winner] || '', p2Winner];
+                    }
+                    
+                    const predictedWinnerData = participantPicks[matchId];
+                    const predictedWinner = Array.isArray(predictedWinnerData) ? predictedWinnerData[1] : predictedWinnerData;
+                    const actualWinner = actualWinners[matchId];
+
+                    const createPlayerHTML = (playerData) => {
+                        const [seed, name] = playerData;
+                        let classes = ['player-name'];
+                        if (predictedWinner && name === predictedWinner) {
+                            if (participantPicks !== actualWinners) {
+                                if (actualWinner && predictedWinner === actualWinner) classes.push('correct-pick');
+                                else if (actualWinner && predictedWinner !== actualWinner) classes.push('incorrect-pick');
+                            }
+                        }
+                        return `<div class="player"><span class="player-seed">${seed}</span><span class="${classes.join(' ')}">${name}</span></div>`;
+                    };
+
+                    matchupDiv.innerHTML = createPlayerHTML(p1) + createPlayerHTML(p2);
+                    if (participantPicks !== actualWinners && predictedWinner && actualWinner && predictedWinner !== actualWinner) {
+                        matchupDiv.innerHTML += `<div class="actual-winner-note">Actual: ${actualWinner}</div>`;
+                    }
+                    matchupWrapper.appendChild(matchupDiv);
+                }
+                roundDiv.appendChild(matchupWrapper);
+                container.appendChild(roundDiv);
+            });
+            const champData = participantPicks[`${category}-f-match-0`];
+            const champ = Array.isArray(champData) ? champData[1] : champData || "";
+            const champDiv = document.createElement('div');
+            champDiv.className = 'round';
+            champDiv.innerHTML = `<div class="round-title">Champion</div><div class="matchup-wrapper" style="justify-content: center;"><div class="champion-container"><div class="champion-box"><div class="champion-trophy">🏆</div><div class="champion-name">${champ}</div></div></div></div>`;
+            container.appendChild(champDiv);
         }
 
         function createInteractiveBracket(containerId, initialData, category) {
@@ -343,7 +497,6 @@
             rounds.forEach(round => {
                 const roundDiv = document.createElement('div');
                 roundDiv.className = 'round';
-                // *** FIX: Added the ID to the round container div ***
                 roundDiv.id = `${category}-${round.key}`;
                 roundDiv.innerHTML = `<div class="round-title">${round.name}</div><div class="matchup-wrapper"></div>`;
                 bracketContainer.appendChild(roundDiv);
@@ -430,11 +583,11 @@
         async function handlePick(matchId, winnerData) {
             const newPicks = { ...userProfile.picks };
             
-            if (!winnerData) { // If winnerData is null, it means we are clearing the pick
-                if (!newPicks[matchId]) return; // Nothing to clear
+            if (!winnerData) {
+                if (!newPicks[matchId]) return;
                 delete newPicks[matchId];
             } else {
-                if (newPicks[matchId] && newPicks[matchId][1] === winnerData[1]) return; // No change
+                if (newPicks[matchId] && newPicks[matchId][1] === winnerData[1]) return;
                 newPicks[matchId] = winnerData;
             }
 
@@ -457,7 +610,7 @@
         
         function renderSubmissionArea() {
             const submissionArea = document.getElementById('submission-area');
-            const totalMatches = 62; // 31 per bracket
+            const totalMatches = 62;
             const picksCount = Object.keys(userProfile.picks || {}).length;
 
             if (picksCount >= totalMatches) {
