@@ -45,9 +45,29 @@ The repository is organized into three main directories:
 3.  **Configure the Cloud Function:**
     * Follow the Firebase documentation to generate a `serviceAccountKey.json` file for your project.
     * Place this key file inside the `/functions` directory. The `.gitignore` will also keep this file private.
-4.  **Update Tournament Data:**
-    * Edit the `/public/tournament_data.json` file with the players and matchups for your tournament.
-    * **Crucially, copy this same `tournament_data.json` file into the `/functions` directory**, as the Cloud Function needs it to calculate scores.
+4.  **Generate Tournament Data:**
+    * Create a file named `entrants.txt` in the root of your project.
+    * Add the matchups in the following format, specifying the day for each half of the draw:
+        ```
+        mens
+        Top Half (Day 1)
+        (1) Jannik Sinner vs Christopher O'Connell
+        ... (8 matchups total) ...
+
+        Bottom Half (Day 2)
+        (8) Casper Ruud vs Juncheng Shang
+        ... (8 matchups total) ...
+
+        womens
+        Top Half (Day 2)
+        (1) Iga Swiatek vs A. Pavlyuchenkova
+        ... (etc.) ...
+        ```
+    * From the root of your project, run the setup script to generate the JSON file:
+        ```
+        python scripts/setup_bracket.py -e entrants.txt -o public/tournament_data.json
+        ```
+    * **Crucially, copy the generated `public/tournament_data.json` file into the `/functions` directory**, as the Cloud Function needs it to calculate scores.
 
 ### Step 3: Deployment
 

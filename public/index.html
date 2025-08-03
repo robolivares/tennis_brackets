@@ -86,7 +86,7 @@
 
         async function init() {
             try {
-                const configModule = await import('./app-config.js');
+                const configModule = await import(`./app-config.js?v=${new Date().getTime()}`);
                 appConfig = configModule.appConfig;
                 firebaseConfig = configModule.firebaseConfig;
                 const app = initializeApp(firebaseConfig);
@@ -128,7 +128,6 @@
             unsubscribeViewer = onSnapshot(viewerDocRef, (docSnap) => {
                 viewerData = docSnap.exists() ? docSnap.data() : null;
                 if (isInitialView && viewerData) {
-                    // Default to showing "Actual Results" unless the logged-in user is a participant
                     currentlyViewedParticipantIndex = -1; 
                     if (userProfile) {
                         const userIndex = viewerData.participants.findIndex(p => p.fullName === userProfile.fullName);
@@ -150,13 +149,12 @@
         }
 
         function updateUI() {
-            // Don't render anything until the user's profile is loaded
-            if (!userProfile && !auth.currentUser) {
+            if (auth.currentUser && !userProfile) {
+                // User is logged in but has no profile document yet, keep showing login.
                 renderLoginView();
                 return;
-            } else if (!userProfile && auth.currentUser) {
-                // This state can happen briefly after login before the doc is created.
-                // Or if a user is logged in but has no profile.
+            }
+            if (!userProfile) {
                 renderLoginView();
                 return;
             }
@@ -177,6 +175,34 @@
                 renderAppView();
             }
         }
+        
+        async function handleLogin() {
+            const fullName = document.getElementById('full-name-input').value.trim();
+            const nickname = document.getElementById('nickname-input').value.trim();
+            if (fullName.length < 2 || nickname.length < 2) {
+                alert("Please enter a valid full name and nickname.");
+                return;
+            }
+
+            statusText.textContent = "Creating your bracket...";
+            try {
+                let user = auth.currentUser;
+                if (!user) {
+                    const userCredential = await signInAnonymously(auth);
+                    user = userCredential.user;
+                }
+                
+                const newUserProfile = { fullName, nickname, picks: {}, isLocked: false };
+                const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", user.uid);
+                await setDoc(userDocRef, newUserProfile);
+                // The onAuthStateChanged and onSnapshot listeners will handle the UI update automatically
+            } catch (error) {
+                console.error("Login/Profile creation failed:", error);
+                statusText.textContent = "Could not create your bracket. Please try again.";
+            }
+        }
+
+        // --- All other functions remain the same ---
         
         function renderViewerMode() {
             statusText.textContent = "Viewing results.";
@@ -260,8 +286,6 @@
             });
         }
         
-        // --- Full, correct render functions are included below ---
-
         function renderLoginView() {
             userInfoDisplay.classList.add('hidden');
             mainContent.innerHTML = `
@@ -561,25 +585,6 @@
             document.getElementById(`${category}-champion-name`).textContent = (champ && champ[1] !== 'TBD') ? champ[1] : '';
         }
         
-        async function handleLogin() {
-            const fullName = document.getElementById('full-name-input').value.trim();
-            const nickname = document.getElementById('nickname-input').value.trim();
-            if (fullName.length < 2 || nickname.length < 2) return;
-
-            statusText.textContent = "Creating your bracket...";
-            try {
-                if (!auth.currentUser) {
-                    await signInAnonymously(auth);
-                    return;
-                }
-                const newUserProfile = { fullName, nickname, picks: {}, isLocked: false };
-                const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", currentUserId);
-                await setDoc(userDocRef, newUserProfile);
-            } catch (error) {
-                statusText.textContent = "Could not create your bracket. Please try again.";
-            }
-        }
-
         async function handlePick(matchId, winnerData) {
             const newPicks = { ...userProfile.picks };
             
