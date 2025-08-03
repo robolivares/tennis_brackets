@@ -150,7 +150,6 @@
 
         function updateUI() {
             if (auth.currentUser && !userProfile) {
-                // User is logged in but has no profile document yet, keep showing login.
                 renderLoginView();
                 return;
             }
@@ -195,14 +194,11 @@
                 const newUserProfile = { fullName, nickname, picks: {}, isLocked: false };
                 const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", user.uid);
                 await setDoc(userDocRef, newUserProfile);
-                // The onAuthStateChanged and onSnapshot listeners will handle the UI update automatically
             } catch (error) {
                 console.error("Login/Profile creation failed:", error);
                 statusText.textContent = "Could not create your bracket. Please try again.";
             }
         }
-
-        // --- All other functions remain the same ---
         
         function renderViewerMode() {
             statusText.textContent = "Viewing results.";
@@ -482,24 +478,26 @@
                     }
                     
                     const predictedWinnerData = participantPicks[matchId];
-                    const predictedWinner = Array.isArray(predictedWinnerData) ? predictedWinnerData[1] : predictedWinnerData;
-                    const actualWinner = actualWinners[matchId];
+                    const predictedWinnerName = Array.isArray(predictedWinnerData) ? predictedWinnerData[1] : predictedWinnerData;
+                    
+                    const actualWinnerData = actualWinners[matchId];
+                    const actualWinnerName = actualWinnerData ? (Array.isArray(actualWinnerData) ? actualWinnerData[1] : actualWinnerData) : null;
 
                     const createPlayerHTML = (playerData) => {
                         const [seed, name] = playerData;
                         let classes = ['player-name'];
-                        if (predictedWinner && name === predictedWinner) {
+                        if (predictedWinnerName && name === predictedWinnerName) {
                             if (participantPicks !== actualWinners) {
-                                if (actualWinner && predictedWinner === actualWinner) classes.push('correct-pick');
-                                else if (actualWinner && predictedWinner !== actualWinner) classes.push('incorrect-pick');
+                                if (actualWinnerName && predictedWinnerName === actualWinnerName) classes.push('correct-pick');
+                                else if (actualWinnerName && predictedWinnerName !== actualWinnerName) classes.push('incorrect-pick');
                             }
                         }
                         return `<div class="player"><span class="player-seed">${seed}</span><span class="${classes.join(' ')}">${name}</span></div>`;
                     };
 
                     matchupDiv.innerHTML = createPlayerHTML(p1) + createPlayerHTML(p2);
-                    if (participantPicks !== actualWinners && predictedWinner && actualWinner && predictedWinner !== actualWinner) {
-                        matchupDiv.innerHTML += `<div class="actual-winner-note">Actual: ${actualWinner}</div>`;
+                    if (participantPicks !== actualWinners && predictedWinnerName && actualWinnerName && predictedWinnerName !== actualWinnerName) {
+                        matchupDiv.innerHTML += `<div class="actual-winner-note">Actual: ${actualWinnerName}</div>`;
                     }
                     matchupWrapper.appendChild(matchupDiv);
                 }

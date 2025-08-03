@@ -2,8 +2,6 @@
 
 This project is a modern, fully-featured platform for running real-time tennis tournament bracket sweepstakes. It uses a web-based interface for both participants and administrators, with a serverless backend powered by Firebase for data storage and automated, real-time score calculation.
 
-The old manual Python scripts have been deprecated in favor of this more robust and user-friendly system.
-
 ## Core Features
 
 * **Real-Time Updates:** Scores and leaderboards update automatically for all users the moment an admin submits a new match result.
@@ -15,8 +13,6 @@ The old manual Python scripts have been deprecated in favor of this more robust 
 * **Scalable & Cost-Effective:** Built on the serverless, free-tier-friendly architecture of Firebase and Netlify.
 
 ## Project Structure
-
-The repository is organized into three main directories:
 
 * `/public/`: This is the root of your website. The contents of this folder will be deployed to Netlify.
 * `/functions/`: Contains the backend Cloud Function code (`main.py`) responsible for automatic score calculation.
@@ -40,56 +36,52 @@ The repository is organized into three main directories:
 1.  **Clone the Repository:** Clone this project from GitHub to your local machine.
 2.  **Configure the Website:**
     * In the `/public` directory, rename `app-config.js.template` to `app-config.js`.
-    * Paste your `firebaseConfig` credentials into this new file.
+    * Paste your `firebaseConfig` credentials into this new file and set your `TOURNAMENT_ID`.
     * **IMPORTANT:** The `.gitignore` file is already configured to ignore `app-config.js`, so your secrets will **not** be committed to GitHub.
 3.  **Configure the Cloud Function:**
     * Follow the Firebase documentation to generate a `serviceAccountKey.json` file for your project.
     * Place this key file inside the `/functions` directory. The `.gitignore` will also keep this file private.
 4.  **Generate Tournament Data:**
     * Create a file named `entrants.txt` in the root of your project.
-    * Add the matchups in the following format, specifying the day for each half of the draw:
+    * Add the matchups in the following format, specifying the day for each half of the draw. The seed is optional.
         ```
         mens
         Top Half (Day 1)
         (1) Jannik Sinner vs Christopher O'Connell
-        ... (8 matchups total) ...
+        (17) Tommy Paul vs (16) Karen Khachanov
+        ... (8 matchups total for the top half) ...
 
         Bottom Half (Day 2)
         (8) Casper Ruud vs Juncheng Shang
-        ... (8 matchups total) ...
+        ... (8 matchups total for the bottom half) ...
 
         womens
         Top Half (Day 2)
         (1) Iga Swiatek vs A. Pavlyuchenkova
         ... (etc.) ...
         ```
-    * From the root of your project, run the setup script to generate the JSON file:
+    * From the root of your project, run the setup script. Use the `-s` flag to specify the name for the Firebase Storage file, which **must match your `TOURNAMENT_ID`**.
+        ```bash
+        # Example for a tournament with ID 'usopen2024-v3'
+        python scripts/setup_bracket.py -e entrants.txt -o public/tournament_data.json -s storage_files/usopen2024-v3.json
         ```
-        python scripts/setup_bracket.py -e entrants.txt -o public/tournament_data.json
-        ```
-    * **Crucially, copy the generated `public/tournament_data.json` file into the `/functions` directory**, as the Cloud Function needs it to calculate scores.
+    * This command creates two files:
+        1.  `public/tournament_data.json` (for the website)
+        2.  `storage_files/usopen2024-v3.json` (for the backend)
+5.  **Upload to Storage:** Manually upload the file from your `storage_files` directory (e.g., `usopen2024-v3.json`) to a `tournaments/` folder in your Firebase Storage bucket.
 
 ### Step 3: Deployment
 
 1.  **Deploy the Website (Manual Drag and Drop):**
-    * This method is simple and ensures your `app-config.js` with your private keys is included in the deployment without ever being exposed on GitHub.
     * Go to [**https://app.netlify.com/drop**](https://app.netlify.com/drop).
     * Drag and drop your entire local `/public` folder onto the page.
-    * Netlify will upload the files and give you a unique, public URL to share.
-    * **To update your site,** simply drag and drop the updated `/public` folder onto your site's deploy page in the Netlify dashboard.
 2.  **Deploy the Cloud Function:**
-    * Install the Firebase CLI (`npm install -g firebase-tools`).
-    * Log in with `firebase login`.
-    * From the **root of the `tennis_brackets` project folder**, run the deploy command:
+    * From the **root of the `tennis_brackets` project folder**, run:
         ```bash
         firebase deploy --only functions
         ```
 
 ### Step 4: Running the Sweepstakes
 
-1.  **For Participants:** Share the public Netlify URL. They can visit the site, enter their name/nickname, and fill out their bracket.
-2.  **For the Admin:**
-    * Navigate to `your-netlify-url.netlify.app/admin.html`.
-    * Enter the admin password (set inside `admin.html`).
-    * As the tournament progresses, update match winners and click "Save All Results".
-    * The Cloud Function will automatically trigger, and the leaderboard on the main `index.html` page will update for everyone in real-time.
+1.  **For Participants:** Share the public Netlify URL.
+2.  **For the Admin:** Navigate to `/admin.html` on your site to update results. The Cloud Function will handle scoring automatically.

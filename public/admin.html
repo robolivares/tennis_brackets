@@ -34,52 +34,40 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // --- Configuration ---
-        const ADMIN_PASSWORD = "your-secret-password"; // IMPORTANT: Change this password
+        const ADMIN_PASSWORD = "your-secret-password"; 
 
-        // --- Global Variables ---
         let db, auth;
         let tournamentData = null;
         let actualResults = {};
         let appConfig;
+        let seedMap = { mens: {}, womens: {} };
 
-        // --- DOM Elements ---
         const passwordView = document.getElementById('password-view');
         const adminContent = document.getElementById('admin-content');
         const passwordInput = document.getElementById('password-input');
         const loginBtn = document.getElementById('login-btn');
         const errorMessage = document.getElementById('error-message');
 
-        // --- Event Listeners ---
         loginBtn.addEventListener('click', handleLogin);
         passwordInput.addEventListener('keyup', (event) => {
             if (event.key === 'Enter') handleLogin();
         });
 
-        // --- Core Functions ---
         async function handleLogin() {
             if (passwordInput.value !== ADMIN_PASSWORD) {
                 errorMessage.textContent = "Incorrect password.";
                 return;
             }
-
             errorMessage.textContent = 'Logging in...';
-            
             try {
-                // Dynamically import config to catch errors
                 const configModule = await import('./app-config.js');
                 appConfig = configModule.appConfig;
-
-                // Initialize Firebase
                 const app = initializeApp(configModule.firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 await signInAnonymously(auth);
-                
-                // Load data and show the main view
                 await loadData();
                 showAdminView();
-
             } catch (error) {
                 console.error("Login or Initialization Failed:", error);
                 errorMessage.textContent = `Error: ${error.message}`;
@@ -94,22 +82,23 @@
 
         async function loadData() {
             try {
-                // 1. Fetch the tournament structure
                 const response = await fetch(`tournament_data.json?v=${new Date().getTime()}`);
                 if (!response.ok) throw new Error('Could not fetch tournament_data.json.');
                 tournamentData = await response.json();
 
-                // 2. Fetch existing results from Firestore
+                // Create a seed map for easy lookup
+                seedMap.mens = Object.fromEntries(tournamentData.mens_draw.flatMap(m => m.players).map(p => [p[1], p[0]]));
+                seedMap.womens = Object.fromEntries(tournamentData.womens_draw.flatMap(m => m.players).map(p => [p[1], p[0]]));
+
                 const resultsDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults");
                 const docSnap = await getDoc(resultsDocRef);
                 if (docSnap.exists()) {
                     actualResults = docSnap.data().winners || {};
                 }
             } catch (error) {
-                // Display error inside the admin content area if data loading fails
                 adminContent.innerHTML = `<p class="text-red-500 text-center text-lg p-8 bg-white rounded-lg shadow-md">${error.message}</p>`;
-                adminContent.classList.remove('hidden'); // Ensure the error is visible
-                throw error; // Stop further execution
+                adminContent.classList.remove('hidden');
+                throw error;
             }
         }
 
@@ -136,18 +125,19 @@
             document.getElementById('mens-results').innerHTML = createFormHTML(tournamentData.mens_draw, 'mens');
             document.getElementById('womens-results').innerHTML = createFormHTML(tournamentData.womens_draw, 'womens');
             
-            // Add event listeners after rendering
             document.getElementById('save-results-btn').addEventListener('click', saveResults);
             adminContent.querySelectorAll('select').forEach(select => {
                 select.addEventListener('change', (e) => {
                     const matchId = e.target.id;
-                    const winner = e.target.value;
-                    if (winner) {
-                        actualResults[matchId] = winner;
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    const winnerName = selectedOption.value;
+                    
+                    if (winnerName) {
+                        const winnerSeed = selectedOption.dataset.seed;
+                        actualResults[matchId] = [winnerSeed, winnerName];
                     } else {
                         delete actualResults[matchId];
                     }
-                    // Re-render to update dependent dropdowns
                     renderAllForms();
                 });
             });
@@ -158,7 +148,7 @@
             const rounds = ["r32", "r16", "qf", "sf", "f"];
             const roundNames = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
             
-            let previousRoundWinners = {}; // Store winners from the previous round
+            let previousRoundWinners = {};
 
             rounds.forEach((roundKey, roundIndex) => {
                 html += `<h3 class="text-lg font-bold mt-4 border-b pb-2">${roundNames[roundIndex]}</h3>`;
@@ -166,31 +156,32 @@
 
                 for (let i = 0; i < numMatches; i++) {
                     const matchId = `${category}-${roundKey}-match-${i}`;
-                    let p1 = 'TBD', p2 = 'TBD';
+                    let p1 = ['', 'TBD'], p2 = ['', 'TBD'];
 
                     if (roundIndex === 0) {
-                        p1 = drawData[i].players[0][1];
-                        p2 = drawData[i].players[1][1];
+                        p1 = drawData[i].players[0];
+                        p2 = drawData[i].players[1];
                     } else {
                         const prevRoundKey = rounds[roundIndex - 1];
-                        p1 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2}`] || 'TBD';
-                        p2 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2 + 1}`] || 'TBD';
+                        p1 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2}`] || ['', 'TBD'];
+                        p2 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2 + 1}`] || ['', 'TBD'];
                     }
                     
-                    const selectedWinner = actualResults[matchId];
-                    if(selectedWinner) {
-                        previousRoundWinners[matchId] = selectedWinner;
+                    const selectedWinnerData = actualResults[matchId];
+                    const selectedWinnerName = selectedWinnerData ? selectedWinnerData[1] : null;
+                    if(selectedWinnerData) {
+                        previousRoundWinners[matchId] = selectedWinnerData;
                     }
 
-                    const isDisabled = p1 === 'TBD' || p2 === 'TBD';
+                    const isDisabled = p1[1] === 'TBD' || p2[1] === 'TBD';
 
                     html += `
                         <div class="p-2 border-b">
-                            <label class="block text-sm font-medium text-gray-600">${p1} vs ${p2}</label>
+                            <label class="block text-sm font-medium text-gray-600">${p1[1]} vs ${p2[1]}</label>
                             <select id="${matchId}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" ${isDisabled ? 'disabled' : ''}>
                                 <option value="">-- Select Winner --</option>
-                                <option value="${p1}" ${selectedWinner === p1 ? 'selected' : ''}>${p1}</option>
-                                <option value="${p2}" ${selectedWinner === p2 ? 'selected' : ''}>${p2}</option>
+                                <option value="${p1[1]}" data-seed="${p1[0]}" ${selectedWinnerName === p1[1] ? 'selected' : ''}>${p1[1]}</option>
+                                <option value="${p2[1]}" data-seed="${p2[0]}" ${selectedWinnerName === p2[1] ? 'selected' : ''}>${p2[1]}</option>
                             </select>
                         </div>
                     `;

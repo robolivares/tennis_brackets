@@ -1,10 +1,10 @@
 # Cloud Functions for Bracket Automation
 
-This directory contains the backend logic for the Tennis Bracket Challenge application. The code here runs on Google's servers and is responsible for automatically calculating scores.
+This directory contains the backend logic for the Tennis Bracket Challenge application. The code here runs on Google's servers and is responsible for automatically calculating scores for any number of concurrent tournaments.
 
 ## Main File
 
-* `main.py`: This is the core file for the Cloud Function. It contains the Python code that is triggered whenever the tournament results are updated in the Firestore database.
+* `main.py`: This is the core file for the Cloud Function. It is triggered whenever any tournament's results are updated in Firestore. It then intelligently downloads the correct tournament data file from Firebase Storage and recalculates the scores.
 
 ## How to Update and Deploy
 

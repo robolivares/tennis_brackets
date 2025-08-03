@@ -2,6 +2,7 @@ import json
 import os
 import re
 import argparse
+import shutil
 
 def parse_entrants(filepath="entrants.txt"):
     """
@@ -75,34 +76,51 @@ def generate_tournament_json(data, output_path):
         "womens_draw": process_draw(data['womens'])
     }
 
+    # Ensure the output directory exists
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(tournament_config, f, indent=4)
-    print(f"Successfully generated tournament data at: {output_path}")
+    print(f"Successfully generated primary tournament data at: {output_path}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate tournament_data.json from entrants.txt.")
+    parser = argparse.ArgumentParser(description="Generate tournament_data.json from an entrants text file.")
     parser.add_argument('-e', '--entrants', default='entrants.txt', help="Path to the entrants text file.")
-    parser.add_argument('-o', '--output', default='tournament_data.json', help="Path for the output JSON file.")
+    parser.add_argument('-o', '--output', default='public/tournament_data.json', help="Path for the primary output JSON file for the website.")
+    parser.add_argument('-s', '--storage_output', help="Optional path for the second output JSON file for Firebase Storage.")
+
     args = parser.parse_args()
 
     print("--- Tournament JSON Generator ---")
     parsed_data = parse_entrants(args.entrants)
     if parsed_data:
-        # NEW: Check for and fill empty halves with placeholders
         placeholder_match = [['', 'TBD'], ['', 'TBD']]
         for category in ['mens', 'womens']:
             if not parsed_data[category]['top']:
-                print(f"'{category.title()}' Top Half is empty. Filling with 8 placeholder matches.")
                 parsed_data[category]['top'] = [placeholder_match for _ in range(8)]
             if not parsed_data[category]['bottom']:
-                print(f"'{category.title()}' Bottom Half is empty. Filling with 8 placeholder matches.")
                 parsed_data[category]['bottom'] = [placeholder_match for _ in range(8)]
 
-        # Now, the validation will always pass, even with a partial entrants file.
         if len(parsed_data['mens']['top']) != 8 or len(parsed_data['mens']['bottom']) != 8 or \
            len(parsed_data['womens']['top']) != 8 or len(parsed_data['womens']['bottom']) != 8:
-            print("\nError: A section in your entrants.txt has an incorrect number of matchups. Each half must have exactly 8 or 0 matches.")
+            print("\nError: A section in your entrants.txt has an incorrect number of matchups. Each half must have exactly 8 matches.")
         else:
+            # Generate the primary file for the website
             generate_tournament_json(parsed_data, args.output)
-            print("\nSetup complete! You can now upload the generated JSON file with your web app.")
+
+            # If the storage_output path is provided, create a copy there
+            if args.storage_output:
+                try:
+                    storage_dir = os.path.dirname(args.storage_output)
+                    if storage_dir:
+                        os.makedirs(storage_dir, exist_ok=True)
+
+                    shutil.copy(args.output, args.storage_output)
+                    print(f"Successfully created copy for Firebase Storage at: {args.storage_output}")
+                except Exception as e:
+                    print(f"\nError: Could not copy file to storage path: {e}")
+
+            print("\nSetup complete!")
 
