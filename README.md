@@ -1,85 +1,75 @@
-# Tennis Tournament Bracket Sweepstakes
+# Real-Time Tennis Bracket Sweepstakes
 
-This project is a complete system for creating, managing, and scoring tournament bracket sweepstakes for tennis events. It includes Python scripts to generate interactive HTML brackets (for both 32-player and 128-player draws), a command-line tool for scoring, and a master viewer generator for comparing all participants' brackets against the actual results.
+This project is a modern, fully-featured platform for running real-time tennis tournament bracket sweepstakes. It uses a web-based interface for both participants and administrators, with a serverless backend powered by Firebase for data storage and automated, real-time score calculation.
+
+The old manual Python scripts have been deprecated in favor of this more robust and user-friendly system.
 
 ## Core Features
 
-* **Customizable Brackets:** Generate brackets for any tournament by simply editing a text file.
-* **Interactive HTML Interface:** Participants can easily fill out their brackets in a clean, user-friendly web interface.
-* **Automated Data Collection:** Seamlessly collect all predictions using a Google Form integration.
-* **Flexible Scoring:** A command-line tool to calculate scores for individual brackets or generate a full leaderboard.
-* **Master Results Viewer:** A single, shareable HTML file that displays a leaderboard and allows everyone to compare brackets visually.
-* **Developer-Friendly:** Includes a hidden "Dev Mode" for rapid testing and debugging.
+* **Real-Time Updates:** Scores and leaderboards update automatically for all users the moment an admin submits a new match result.
+* **Dual-View Picking:** Participants can fill out their brackets using a classic visual **Bracket View** or a mobile-friendly **List View**.
+* **Secure Authentication:** Each participant gets their own secure bracket, and anonymous login makes it easy to get started.
+* **Automated Scoring:** A Firebase Cloud Function handles all score calculations in the background. No more manual scripts!
+* **Admin Panel:** A simple, password-protected admin page for updating match results.
+* **Interactive Viewer Mode:** A comprehensive viewer that includes a leaderboard, participant toggles, and a visual comparison of picks against actual results.
+* **Scalable & Cost-Effective:** Built on the serverless, free-tier-friendly architecture of Firebase and Netlify.
 
-## Project Files
+## Project Structure
 
-* `entrants.txt`: Data file for the **Round of 32** bracket. List 16 matchups per category here.
-* `entrants_128.txt`: Data file for the **Round of 128** bracket. List 64 matchups per category here.
-* `setup_bracket.py`: Python script to generate the interactive `bracket.html` for a **Round of 32** sweepstakes.
-* `setup_bracket_128.py`: Python script to generate the interactive `bracket_128.html` for a full **Round of 128** sweepstakes. **(Note: This version is currently in development and may have bugs.)**
-* `score_manager.py`: A command-line tool to score brackets individually or generate a scoreboard in the terminal (for Round of 32 brackets).
-* `generate_viewer.py`: A command-line tool that reads all prediction files and generates a master `index.html` viewer page (for Round of 32 brackets).
-* `LICENSE`: The MIT License file for the project.
+The repository is organized into three main directories:
 
----
+* `/public/`: This is the root of your website. The contents of this folder will be deployed to Netlify.
+* `/functions/`: Contains the backend Cloud Function code (`main.py`) responsible for automatic score calculation.
+* `/scripts/`: Contains optional helper scripts, such as a manual score calculator (`calculate_scores.py`) for backup or testing purposes.
 
 ## Full Workflow: From Setup to Sharing
 
-### Step 1: Initial Setup (Admin)
+### Step 1: Firebase Setup (One-Time)
 
-1.  **Choose Your Bracket Size:** Decide if you are running a Round of 32 (5 rounds) or a full Round of 128 (7 rounds) tournament.
+1.  **Create a Firebase Project:** Go to the [Firebase Console](https://console.firebase.google.com/) and create a new project.
+2.  **Create a Firestore Database:** In your project, go to **Build > Firestore Database** and create a database in **Production mode**.
+3.  **Get Web Credentials:**
+    * In your project settings (gear icon), scroll down to "Your apps".
+    * Create a new **Web app**.
+    * Copy the `firebaseConfig` object containing your API keys.
+4.  **Upgrade to Blaze Plan:** To use Cloud Functions, you must upgrade your project to the **Blaze (Pay-as-you-go)** plan. You still get a generous free tier, so costs for this project should be $0.
+5.  **Set Up Security Rules:** In the Firestore Database section, go to the **Rules** tab and paste in the required security rules to allow users to write their own brackets and read results.
 
-2.  **Prepare the Entrants File:**
-    * For a R32 bracket, edit `entrants.txt`.
-    * For a R128 bracket, edit `entrants_128.txt`.
-    * List all the initial matchups under the `mens` and `womens` headers.
-    * **Format:** `(SEED) Player One vs (SEED) Player Two`. The seed is optional.
+### Step 2: Local Project Setup
 
-3.  **Configure the Google Form (One-Time Setup):**
-    * Create a Google Form with two "Short answer" questions (e.g., "Name" and "Prediction Data").
-    * Get the pre-filled link and find the unique `entry.XXXXXXXXXX` IDs for each question.
-    * Open the appropriate setup script (`setup_bracket.py` or `setup_bracket_128.py`) and update the `google_form_config` dictionary with your new IDs. **Ensure the `action_url` ends in `/formResponse`**.
+1.  **Clone the Repository:** Clone this project from GitHub to your local machine.
+2.  **Configure the Website:**
+    * In the `/public` directory, rename `app-config.js.template` to `app-config.js`.
+    * Paste your `firebaseConfig` credentials into this new file.
+    * **IMPORTANT:** The `.gitignore` file is already configured to ignore `app-config.js`, so your secrets will **not** be committed to GitHub.
+3.  **Configure the Cloud Function:**
+    * Follow the Firebase documentation to generate a `serviceAccountKey.json` file for your project.
+    * Place this key file inside the `/functions` directory. The `.gitignore` will also keep this file private.
+4.  **Update Tournament Data:**
+    * Edit the `/public/tournament_data.json` file with the players and matchups for your tournament.
+    * **Crucially, copy this same `tournament_data.json` file into the `/functions` directory**, as the Cloud Function needs it to calculate scores.
 
-4.  **Generate the Bracket HTML:**
-    * Run the corresponding setup script from your terminal:
-        * For R32: `python3 setup_bracket.py`
-        * For R128: `python3 setup_bracket_128.py`
-    * This will create the interactive HTML file (`bracket.html` or `bracket_128.html`).
+### Step 3: Deployment
 
-5.  **Distribute to Participants:**
-    * Send the generated HTML file to your friends. It's recommended they use a desktop browser for the best experience.
+1.  **Deploy the Website (Manual Drag and Drop):**
+    * This method is simple and ensures your `app-config.js` with your private keys is included in the deployment without ever being exposed on GitHub.
+    * Go to [**https://app.netlify.com/drop**](https://app.netlify.com/drop).
+    * Drag and drop your entire local `/public` folder onto the page.
+    * Netlify will upload the files and give you a unique, public URL to share.
+    * **To update your site,** simply drag and drop the updated `/public` folder onto your site's deploy page in the Netlify dashboard.
+2.  **Deploy the Cloud Function:**
+    * Install the Firebase CLI (`npm install -g firebase-tools`).
+    * Log in with `firebase login`.
+    * From the **root of the `tennis_brackets` project folder**, run the deploy command:
+        ```bash
+        firebase deploy --only functions
+        ```
 
-### Step 2: Collecting Predictions (Participants & Admin)
+### Step 4: Running the Sweepstakes
 
-1.  **Participants Fill Out Bracket:** Each person opens the HTML file, fills out their entire bracket, and clicks **"Lock In & Review Bracket"**.
-2.  **Participants Submit:** After reviewing their picks on the static "receipt" page, they click **"Submit My Bracket"**. This will automatically open and submit their data to your Google Form.
-3.  **Admin Collects Data:**
-    * Open the Google Sheet linked to your form.
-    * For each submission, copy the text from the "Prediction Data" column.
-    * Create a new `.csv` file for each person in a dedicated folder (e.g., `all_brackets/`).
-    * Paste the data into the file and save it as `[participant_name]_predictions.csv`.
-    * **Important:** Ensure the first line of each file is the header: `Category,Round,MatchID,PredictedWinner`.
-
-### Step 3: Scoring and Viewing (Admin)
-
-1.  **Create the "Actual Results" File:**
-    * Fill out a bracket yourself with the real-world results of the tournament.
-    * Submit it via the Google Form with the name `actual_results`.
-    * Copy the data from the spreadsheet and save it as `actual_results_predictions.csv` inside your `all_brackets` folder. You can update this file as the tournament progresses.
-
-2.  **Generate the Master Viewer:**
-    * Run the viewer generator script, pointing it to your predictions folder and the correct entrants file.
-        * For R32: `python3 generate_viewer.py -b ./all_brackets -e entrants.txt`
-        * For R128: `python3 generate_viewer.py -b ./all_brackets -e entrants_128.txt`
-    * This will create a single `index.html` file inside your `all_brackets` folder.
-
-3.  **Share the Results:**
-    * Go to **https://app.netlify.com/drop**.
-    * Drag and drop your entire `all_brackets` folder onto the page.
-    * Share the unique link Netlify provides with your group!
-
-### Developer Mode (For Testing)
-
-* To activate Dev Mode, add `?dev=true` to the end of the URL when you open `bracket.html` or `bracket_128.html` in your browser.
-* This will display buttons that allow you to automatically and randomly fill the bracket round-by-round, which is extremely useful for testing the submission flow and scoring logic without having to click through every matchup manually.
-
+1.  **For Participants:** Share the public Netlify URL. They can visit the site, enter their name/nickname, and fill out their bracket.
+2.  **For the Admin:**
+    * Navigate to `your-netlify-url.netlify.app/admin.html`.
+    * Enter the admin password (set inside `admin.html`).
+    * As the tournament progresses, update match winners and click "Save All Results".
+    * The Cloud Function will automatically trigger, and the leaderboard on the main `index.html` page will update for everyone in real-time.
