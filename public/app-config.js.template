@@ -1,0 +1,31 @@
+// This file contains all tournament-specific configuration.
+// This file SHOULD NOT be committed to GitHub.
+// 1. Fill this with your own Firebase project configuration.
+// 2. Update the tournament settings for each new event.
+// 3. Save this file as "app-config.js" in the same directory as your index.html
+// 4. Add "app-config.js" to your .gitignore file.
+
+export const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+export const appConfig = {
+  // This ID creates a unique "folder" in your database for this specific tournament's data.
+  // Change this for each new tournament (e.g., 'wimbledon2024', 'ausopen2025').
+  TOURNAMENT_ID: 'usopen2024',
+
+  // This controls which round of 32 matches are selectable.
+  // Set to 1 for the first day, then change to 2 and redeploy for the second day.
+  CURRENT_TOURNAMENT_DAY: 1,
+
+  // This is the master switch for the entire app.
+  // false = The app is in "bracket picking" mode.
+  // true = The app is in "results viewer" mode.
+  VIEWER_MODE_ENABLED: false
+};
+

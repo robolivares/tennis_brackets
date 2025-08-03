@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Bracket Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f7; }
+        .bracket-container { display: flex; align-items: stretch; justify-content: flex-start; overflow-x: auto; padding: 20px; background-color: #e9eef2; border-radius: 8px; }
+        .round { display: flex; flex-direction: column; flex-shrink: 0; margin: 0 15px; }
+        .round-title { font-weight: bold; text-align: center; margin-bottom: 30px; color: #4A0072; min-width: 270px; }
+        .matchup-wrapper { display: flex; flex-direction: column; justify-content: space-around; flex-grow: 1; }
+        .matchup { background-color: #fff; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); width: 270px; position: relative; }
+        .matchup-wrapper > .matchup:not(:last-child) { margin-bottom: 28px; }
+        .player { display: flex; align-items: center; margin: 8px 0; border-radius: 5px; cursor: pointer; }
+        .player:hover:not(.disabled) { background-color: #f0f8ff; }
+        .player.disabled { cursor: not-allowed; opacity: 0.6; }
+        .player-seed { font-size: 0.8em; color: #888; width: 30px; text-align: center; font-weight: 700; }
+        .player-name.winner { font-weight: bold; color: #005A31; }
+        .tbd { font-style: italic; color: #999; }
+        .champion-box { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .champion-trophy { font-size: 4em; color: #d4af37; }
+        .champion-name { font-size: 1.5em; font-weight: bold; color: #005A31; background-color: #fff; padding: 10px 20px; border-radius: 8px; min-height: 30px; text-align: center; }
+        
+        /* Viewer Mode Styles */
+        .leaderboard { max-width: 800px; margin: 2rem auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .leaderboard th, .leaderboard td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .leaderboard th { font-weight: bold; color: #4A0072; }
+        .leaderboard tr:last-child td { border-bottom: none; }
+        .viewer-bracket { border: 2px solid #4A0072; margin-top: 2rem; border-radius: 8px; padding-bottom: 1rem; }
+        .player-name.correct-pick { color: #059669; font-weight: bold; }
+        .player-name.incorrect-pick { color: #dc2626; text-decoration: line-through; }
+        .actual-winner-note { position: absolute; bottom: -22px; left: 0; right: 0; text-align: center; font-size: 0.8em; color: #059669; font-weight: bold; }
+        .participant-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 2em auto; max-width: 1200px; }
+        .participant-btn { background-color: #fff; color: #4A0072; border: 1px solid #4A0072; padding: 0.8rem 1rem; border-radius: 8px; cursor: pointer; transition: background-color 0.2s, color 0.2s; font-weight: bold; text-align: center; }
+        .participant-btn.active { background-color: #4A0072; color: white; }
+
+        /* Picker Toggle Styles */
+        .view-toggle-btn { background-color: #e5e7eb; color: #4b5563; border: 1px solid #d1d5db; transition: background-color 0.2s, color 0.2s; }
+        .view-toggle-btn.active { background-color: #4A0072; color: white; border-color: #4A0072; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="app" class="container mx-auto p-4">
+        <header class="text-center py-6">
+            <h1 class="text-4xl font-bold text-purple-900">Bracket Challenge</h1>
+            <div id="user-info-display" class="hidden mt-2">
+                <p class="text-2xl font-bold text-purple-800" id="display-nickname"></p>
+                <p class="text-sm text-gray-500" id="display-fullname"></p>
+            </div>
+        </header>
+
+        <div id="main-content">
+            <!-- Views will be rendered here -->
+        </div>
+
+        <footer class="text-center mt-8 py-4">
+            <p id="status-text" class="text-gray-500 h-6">Initializing...</p>
+        </footer>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        let db, auth, appConfig, firebaseConfig;
+        let currentUserId = null;
+        let tournamentData = null;
+        let userProfile = null;
+        let viewerData = null;
+        let unsubscribeUser = null;
+        let unsubscribeViewer = null;
+        let activePickerView = 'bracket';
+        let currentlyViewedParticipantIndex = -1; // -1 for "Actual Results"
+        let isInitialView = true;
+
+        const mainContent = document.getElementById('main-content');
+        const statusText = document.getElementById('status-text');
+        const userInfoDisplay = document.getElementById('user-info-display');
+
+        const rounds = [ { name: "Round of 32", key: "r32" }, { name: "Round of 16", key: "r16" }, { name: "Quarterfinals", key: "qf" }, { name: "Semifinals", key: "sf" }, { name: "Final", key: "f" } ];
+
+        async function init() {
+            try {
+                const configModule = await import(`./app-config.js?v=${new Date().getTime()}`);
+                appConfig = configModule.appConfig;
+                firebaseConfig = configModule.firebaseConfig;
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                onAuthStateChanged(auth, handleAuthStateChange);
+            } catch (error) {
+                statusText.textContent = `Fatal Error: ${error.message}`;
+            }
+        }
+
+        async function handleAuthStateChange(user) {
+            if (unsubscribeUser) unsubscribeUser();
+            if (unsubscribeViewer) unsubscribeViewer();
+            if (user) {
+                currentUserId = user.uid;
+                try {
+                    await loadTournamentData();
+                    listenToUserData();
+                    if (appConfig.VIEWER_MODE_ENABLED) listenToViewerData();
+                } catch (error) {
+                    statusText.textContent = `Error: ${error.message}`;
+                }
+            } else {
+                renderLoginView();
+            }
+        }
+
+        function listenToUserData() {
+            const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", currentUserId);
+            unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+                userProfile = docSnap.exists() ? docSnap.data() : null;
+                updateUI();
+            });
+        }
+
+        function listenToViewerData() {
+            const viewerDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "state", "viewerData");
+            unsubscribeViewer = onSnapshot(viewerDocRef, (docSnap) => {
+                viewerData = docSnap.exists() ? docSnap.data() : null;
+                if (isInitialView && viewerData) {
+                    currentlyViewedParticipantIndex = -1; 
+                    if (userProfile) {
+                        const userIndex = viewerData.participants.findIndex(p => p.fullName === userProfile.fullName);
+                        if (userIndex !== -1) {
+                            currentlyViewedParticipantIndex = userIndex;
+                        }
+                    }
+                    isInitialView = false;
+                }
+                updateUI();
+            });
+        }
+
+        async function loadTournamentData() {
+            if (tournamentData) return;
+            const response = await fetch(`tournament_data.json?v=${new Date().getTime()}`);
+            if (!response.ok) throw new Error('Could not fetch tournament_data.json.');
+            tournamentData = await response.json();
+        }
+
+        function updateUI() {
+            if (auth.currentUser && !userProfile) {
+                renderLoginView();
+                return;
+            }
+            if (!userProfile) {
+                renderLoginView();
+                return;
+            }
+
+            userInfoDisplay.classList.remove('hidden');
+            document.getElementById('display-nickname').textContent = userProfile.nickname;
+            document.getElementById('display-fullname').textContent = `(${userProfile.fullName})`;
+
+            if (appConfig.VIEWER_MODE_ENABLED) {
+                if (viewerData) {
+                    renderViewerMode();
+                } else {
+                    mainContent.innerHTML = `<div class="text-center p-8 bg-white rounded-lg shadow-md">Loading leaderboard data...</div>`;
+                }
+            } else if (userProfile.isLocked) {
+                renderLockedView();
+            } else {
+                renderAppView();
+            }
+        }
+        
+        async function handleLogin() {
+            const fullName = document.getElementById('full-name-input').value.trim();
+            const nickname = document.getElementById('nickname-input').value.trim();
+            if (fullName.length < 2 || nickname.length < 2) {
+                alert("Please enter a valid full name and nickname.");
+                return;
+            }
+
+            statusText.textContent = "Creating your bracket...";
+            try {
+                let user = auth.currentUser;
+                if (!user) {
+                    const userCredential = await signInAnonymously(auth);
+                    user = userCredential.user;
+                }
+                
+                const newUserProfile = { fullName, nickname, picks: {}, isLocked: false };
+                const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", user.uid);
+                await setDoc(userDocRef, newUserProfile);
+            } catch (error) {
+                console.error("Login/Profile creation failed:", error);
+                statusText.textContent = "Could not create your bracket. Please try again.";
+            }
+        }
+        
+        function renderViewerMode() {
+            statusText.textContent = "Viewing results.";
+            
+            const displayParticipants = [
+                { name: "Actual Results", picks: viewerData.actual_results, score: null },
+                ...viewerData.participants
+            ];
+
+            const activeDisplayIndex = currentlyViewedParticipantIndex + 1;
+            const participantToView = displayParticipants[activeDisplayIndex];
+
+            const createParticipantSelectorHTML = (position) => `
+                <div id="participant-selector-${position}" class="participant-selector">
+                    ${displayParticipants.map((p, index) => `
+                        <button data-index="${index - 1}" class="participant-btn ${index === activeDisplayIndex ? 'active' : ''}">
+                            ${p.name}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+
+            let html = `
+                <div class="leaderboard">
+                    <h2 class="text-3xl font-bold text-center mb-6 text-purple-900">Leaderboard</h2>
+                    <table class="w-full text-lg">
+                        <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Max Potential</th></tr></thead>
+                        <tbody>
+                            ${viewerData.participants.map((p, index) => `
+                                <tr class="cursor-pointer hover:bg-gray-100" data-index="${index}">
+                                    <td class="font-bold">${p.rank}</td>
+                                    <td>${p.name}</td>
+                                    <td>${p.score}</td>
+                                    <td>${p.max_score}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            html += createParticipantSelectorHTML('top');
+
+            const title = participantToView.name === 'Actual Results'
+                ? `<h2 class="text-2xl font-bold text-center my-4">Actual Results</h2>`
+                : `<h2 class="text-2xl font-bold text-center my-4">${participantToView.name}'s Bracket (Score: ${participantToView.score})</h2>`;
+
+            html += `
+                <div id="bracket-display-area" class="viewer-bracket">
+                    ${title}
+                    <div class="mb-8">
+                        <h3 class="text-xl font-bold text-center mb-4">Men's Bracket</h3>
+                        <div id="mens-bracket-viewer" class="bracket-container"></div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-center mb-4">Women's Bracket</h3>
+                        <div id="womens-bracket-viewer" class="bracket-container"></div>
+                    </div>
+                </div>
+            `;
+
+            html += createParticipantSelectorHTML('bottom');
+            mainContent.innerHTML = html;
+
+            createReadOnlyBracket(`mens-bracket-viewer`, 'mens', participantToView.picks);
+            createReadOnlyBracket(`womens-bracket-viewer`, 'womens', participantToView.picks);
+
+            document.querySelectorAll('.participant-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    currentlyViewedParticipantIndex = parseInt(e.target.dataset.index, 10);
+                    renderViewerMode();
+                });
+            });
+            document.querySelectorAll('.leaderboard tr[data-index]').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    currentlyViewedParticipantIndex = parseInt(e.currentTarget.dataset.index, 10);
+                    renderViewerMode();
+                    const bracketElement = document.getElementById('bracket-display-area');
+                    if (bracketElement) bracketElement.scrollIntoView({ behavior: 'smooth' });
+                });
+            });
+        }
+        
+        function renderLoginView() {
+            userInfoDisplay.classList.add('hidden');
+            mainContent.innerHTML = `
+                <div id="login-view" class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-bold mb-4 text-center">Welcome!</h2>
+                    <p class="mb-6 text-gray-600 text-center">Enter your name and a nickname for your bracket to begin.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="full-name-input" class="block text-sm font-medium text-gray-700">Your Full Name</label>
+                            <input type="text" id="full-name-input" class="mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600" placeholder="e.g., Jane Doe">
+                        </div>
+                        <div>
+                            <label for="nickname-input" class="block text-sm font-medium text-gray-700">Bracket Nickname</label>
+                            <input type="text" id="nickname-input" class="mt-1 w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600" placeholder="e.g., Jane's Aces">
+                        </div>
+                    </div>
+                    <button id="login-btn" class="w-full bg-purple-700 text-white font-bold py-3 mt-6 rounded-lg hover:bg-purple-800 transition-colors">
+                        Start Picking
+                    </button>
+                </div>
+            `;
+            statusText.textContent = "Please provide your details to start.";
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+        }
+
+        function renderAppView() {
+            mainContent.innerHTML = `
+                <div class="text-center my-6">
+                    <div class="inline-flex rounded-md shadow-sm" role="group">
+                        <button type="button" id="bracket-view-btn" class="view-toggle-btn px-4 py-2 text-sm font-medium rounded-l-lg">
+                            Bracket View
+                        </button>
+                        <button type="button" id="list-view-btn" class="view-toggle-btn px-4 py-2 text-sm font-medium rounded-r-lg">
+                            List View
+                        </button>
+                    </div>
+                </div>
+                <div id="picker-content"></div>
+                <div id="submission-area" class="text-center mt-8"></div>
+            `;
+
+            document.getElementById('bracket-view-btn').addEventListener('click', () => setPickerView('bracket'));
+            document.getElementById('list-view-btn').addEventListener('click', () => setPickerView('list'));
+
+            setPickerView(activePickerView);
+            renderSubmissionArea();
+        }
+
+        function setPickerView(view) {
+            activePickerView = view;
+            const bracketBtn = document.getElementById('bracket-view-btn');
+            const listBtn = document.getElementById('list-view-btn');
+            
+            if (view === 'bracket') {
+                bracketBtn.classList.add('active');
+                listBtn.classList.remove('active');
+                renderBracketView();
+            } else {
+                listBtn.classList.add('active');
+                bracketBtn.classList.remove('active');
+                renderListView();
+            }
+        }
+
+        function renderBracketView() {
+            const container = document.getElementById('picker-content');
+            container.innerHTML = `
+                <div class="mb-12">
+                    <h2 class="text-2xl font-bold my-4 text-center">Men's Bracket</h2>
+                    <div id="mens-bracket" class="bracket-container"></div>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold my-4 text-center">Women's Bracket</h2>
+                    <div id="womens-bracket" class="bracket-container"></div>
+                </div>
+            `;
+            createInteractiveBracket('mens-bracket', tournamentData.mens_draw, 'mens');
+            createInteractiveBracket('womens-bracket', tournamentData.womens_draw, 'womens');
+        }
+
+        function renderListView() {
+            const container = document.getElementById('picker-content');
+            container.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-4 text-center">Men's Picks</h2>
+                        <div id="mens-list" class="space-y-4 bg-white p-6 rounded-lg shadow-md"></div>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold mb-4 text-center">Women's Picks</h2>
+                        <div id="womens-list" class="space-y-4 bg-white p-6 rounded-lg shadow-md"></div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('mens-list').innerHTML = createListHTML(tournamentData.mens_draw, 'mens');
+            document.getElementById('womens-list').innerHTML = createListHTML(tournamentData.womens_draw, 'womens');
+
+            container.querySelectorAll('select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const matchId = e.target.id;
+                    const selectedOption = e.target.options[e.target.selectedIndex];
+                    if (!selectedOption.value) {
+                        handlePick(matchId, null);
+                        return;
+                    }
+                    const winnerName = selectedOption.value;
+                    const winnerSeed = selectedOption.dataset.seed;
+                    handlePick(matchId, [winnerSeed, winnerName]);
+                });
+            });
+        }
+
+        function createListHTML(initialData, category) {
+            let html = '';
+            const picks = userProfile.picks || {};
+            
+            rounds.forEach((round, roundIndex) => {
+                html += `<h3 class="text-lg font-bold mt-4 border-b pb-2">${round.name}</h3>`;
+                const numMatches = 16 / Math.pow(2, roundIndex);
+
+                for (let i = 0; i < numMatches; i++) {
+                    const matchId = `${category}-${round.key}-match-${i}`;
+                    let p1 = ['', 'TBD'], p2 = ['', 'TBD'], isDisabled = true;
+
+                    if (roundIndex === 0) {
+                        p1 = initialData[i].players[0];
+                        p2 = initialData[i].players[1];
+                        isDisabled = initialData[i].day > appConfig.CURRENT_TOURNAMENT_DAY;
+                    } else {
+                        const prevRoundKey = rounds[roundIndex - 1].key;
+                        const p1SourceId = `${category}-${prevRoundKey}-match-${i * 2}`;
+                        const p2SourceId = `${category}-${prevRoundKey}-match-${i * 2 + 1}`;
+                        if (picks[p1SourceId]) p1 = picks[p1SourceId];
+                        if (picks[p2SourceId]) p2 = picks[p2SourceId];
+                        if (p1[1] !== 'TBD' && p2[1] !== 'TBD') isDisabled = false;
+                    }
+                    
+                    const selectedWinner = picks[matchId]?.[1];
+
+                    html += `
+                        <div class="p-2 border-b">
+                            <label class="block text-sm font-medium text-gray-600">${p1[1]} vs ${p2[1]}</label>
+                            <select id="${matchId}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" ${isDisabled ? 'disabled' : ''}>
+                                <option value="">-- Select Winner --</option>
+                                <option value="${p1[1]}" data-seed="${p1[0]}" ${selectedWinner === p1[1] ? 'selected' : ''}>${p1[1]}</option>
+                                <option value="${p2[1]}" data-seed="${p2[0]}" ${selectedWinner === p2[1] ? 'selected' : ''}>${p2[1]}</option>
+                            </select>
+                        </div>
+                    `;
+                }
+            });
+            return html;
+        }
+
+        function renderLockedView() {
+            mainContent.innerHTML = `<div class="max-w-2xl mx-auto text-center bg-white p-8 rounded-lg shadow-lg"><h2 class="text-3xl font-bold text-green-700">Bracket Submitted!</h2><p class="mt-4 text-lg text-gray-600">Your picks are locked in. Good luck!</p></div>`;
+        }
+
+        function createReadOnlyBracket(containerId, category, participantPicks) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const actualWinners = viewerData.actual_results || {};
+
+            rounds.forEach((round, roundIndex) => {
+                const roundDiv = document.createElement('div');
+                roundDiv.className = 'round';
+                roundDiv.innerHTML = `<div class="round-title">${round.name}</div>`;
+                const matchupWrapper = document.createElement('div');
+                matchupWrapper.className = 'matchup-wrapper';
+
+                const numMatches = 16 / Math.pow(2, roundIndex);
+                for (let i = 0; i < numMatches; i++) {
+                    const matchId = `${category}-${round.key}-match-${i}`;
+                    const matchupDiv = document.createElement('div');
+                    matchupDiv.className = 'matchup';
+                    
+                    let p1 = ['', 'TBD'], p2 = ['', 'TBD'];
+
+                    if (roundIndex === 0) {
+                        p1 = tournamentData[`${category}_draw`][i].players[0];
+                        p2 = tournamentData[`${category}_draw`][i].players[1];
+                    } else {
+                        const prevRoundKey = rounds[roundIndex - 1].key;
+                        const p1SourceId = `${category}-${prevRoundKey}-match-${i * 2}`;
+                        const p2SourceId = `${category}-${prevRoundKey}-match-${i * 2 + 1}`;
+                        
+                        const p1Winner = participantPicks[p1SourceId];
+                        if (p1Winner) p1 = Array.isArray(p1Winner) ? p1Winner : [viewerData.seed_map[category][p1Winner] || '', p1Winner];
+                        
+                        const p2Winner = participantPicks[p2SourceId];
+                        if (p2Winner) p2 = Array.isArray(p2Winner) ? p2Winner : [viewerData.seed_map[category][p2Winner] || '', p2Winner];
+                    }
+                    
+                    const predictedWinnerData = participantPicks[matchId];
+                    const predictedWinnerName = Array.isArray(predictedWinnerData) ? predictedWinnerData[1] : predictedWinnerData;
+                    
+                    const actualWinnerData = actualWinners[matchId];
+                    const actualWinnerName = actualWinnerData ? (Array.isArray(actualWinnerData) ? actualWinnerData[1] : actualWinnerData) : null;
+
+                    const createPlayerHTML = (playerData) => {
+                        const [seed, name] = playerData;
+                        let classes = ['player-name'];
+                        if (predictedWinnerName && name === predictedWinnerName) {
+                            if (participantPicks !== actualWinners) {
+                                if (actualWinnerName && predictedWinnerName === actualWinnerName) classes.push('correct-pick');
+                                else if (actualWinnerName && predictedWinnerName !== actualWinnerName) classes.push('incorrect-pick');
+                            }
+                        }
+                        return `<div class="player"><span class="player-seed">${seed}</span><span class="${classes.join(' ')}">${name}</span></div>`;
+                    };
+
+                    matchupDiv.innerHTML = createPlayerHTML(p1) + createPlayerHTML(p2);
+                    if (participantPicks !== actualWinners && predictedWinnerName && actualWinnerName && predictedWinnerName !== actualWinnerName) {
+                        matchupDiv.innerHTML += `<div class="actual-winner-note">Actual: ${actualWinnerName}</div>`;
+                    }
+                    matchupWrapper.appendChild(matchupDiv);
+                }
+                roundDiv.appendChild(matchupWrapper);
+                container.appendChild(roundDiv);
+            });
+            const champData = participantPicks[`${category}-f-match-0`];
+            const champ = Array.isArray(champData) ? champData[1] : champData || "";
+            const champDiv = document.createElement('div');
+            champDiv.className = 'round';
+            champDiv.innerHTML = `<div class="round-title">Champion</div><div class="matchup-wrapper" style="justify-content: center;"><div class="champion-container"><div class="champion-box"><div class="champion-trophy">🏆</div><div class="champion-name">${champ}</div></div></div></div>`;
+            container.appendChild(champDiv);
+        }
+
+        function createInteractiveBracket(containerId, initialData, category) {
+            const bracketContainer = document.getElementById(containerId);
+            bracketContainer.innerHTML = '';
+
+            rounds.forEach(round => {
+                const roundDiv = document.createElement('div');
+                roundDiv.className = 'round';
+                roundDiv.id = `${category}-${round.key}`;
+                roundDiv.innerHTML = `<div class="round-title">${round.name}</div><div class="matchup-wrapper"></div>`;
+                bracketContainer.appendChild(roundDiv);
+            });
+            
+            const championContainer = document.createElement('div');
+            championContainer.className = 'round';
+            championContainer.innerHTML = `<div class="round-title">Champion</div><div class="matchup-wrapper" style="justify-content: center;"><div class="champion-container"><div class="champion-box"><div class="champion-trophy">🏆</div><div id="${category}-champion-name" class="champion-name"></div></div></div></div>`;
+            bracketContainer.appendChild(championContainer);
+
+            populateInteractiveBracket(category, initialData);
+
+            bracketContainer.addEventListener('click', (event) => {
+                const playerDiv = event.target.closest('.player');
+                if (playerDiv && !playerDiv.classList.contains('disabled')) {
+                    const matchId = playerDiv.closest('.matchup').id;
+                    const winnerSeed = playerDiv.querySelector('.player-seed').textContent;
+                    const winnerName = playerDiv.querySelector('.player-name').textContent;
+                    handlePick(matchId, [winnerSeed, winnerName]);
+                }
+            });
+        }
+
+        function populateInteractiveBracket(category, initialData) {
+            const picks = userProfile.picks || {};
+            
+            rounds.forEach((round, roundIndex) => {
+                const numMatches = 16 / Math.pow(2, roundIndex);
+                for (let i = 0; i < numMatches; i++) {
+                    const matchId = `${category}-${round.key}-match-${i}`;
+                    const wrapper = document.getElementById(`${category}-${round.key}`).querySelector('.matchup-wrapper');
+                    const matchupDiv = document.createElement('div');
+                    matchupDiv.className = 'matchup';
+                    matchupDiv.id = matchId;
+                    
+                    let p1 = ['', 'TBD'], p2 = ['', 'TBD'], isDisabled = true;
+
+                    if (roundIndex === 0) {
+                        p1 = initialData[i].players[0];
+                        p2 = initialData[i].players[1];
+                        isDisabled = initialData[i].day > appConfig.CURRENT_TOURNAMENT_DAY;
+                    } else {
+                        const prevRoundKey = rounds[roundIndex - 1].key;
+                        const p1SourceId = `${category}-${prevRoundKey}-match-${i * 2}`;
+                        const p2SourceId = `${category}-${prevRoundKey}-match-${i * 2 + 1}`;
+                        if (picks[p1SourceId]) p1 = picks[p1SourceId];
+                        if (picks[p2SourceId]) p2 = picks[p2SourceId];
+                        if (p1[1] !== 'TBD' && p2[1] !== 'TBD') isDisabled = false;
+                    }
+                    
+                    const winner = picks[matchId];
+                    const createPlayerHTML = (playerData, isWinner) => {
+                        const [seed, name] = playerData;
+                        return `<div class="player ${isDisabled || name === 'TBD' ? 'disabled' : ''}"><span class="player-seed">${seed}</span><span class="player-name ${isWinner ? 'winner' : ''} ${name === 'TBD' ? 'tbd' : ''}">${name}</span></div>`;
+                    };
+                    matchupDiv.innerHTML = createPlayerHTML(p1, winner && winner[1] === p1[1]) + createPlayerHTML(p2, winner && winner[1] === p2[1]);
+                    wrapper.appendChild(matchupDiv);
+                }
+            });
+            
+            const champ = picks[`${category}-f-match-0`];
+            document.getElementById(`${category}-champion-name`).textContent = (champ && champ[1] !== 'TBD') ? champ[1] : '';
+        }
+        
+        async function handlePick(matchId, winnerData) {
+            const newPicks = { ...userProfile.picks };
+            
+            if (!winnerData) {
+                if (!newPicks[matchId]) return;
+                delete newPicks[matchId];
+            } else {
+                if (newPicks[matchId] && newPicks[matchId][1] === winnerData[1]) return;
+                newPicks[matchId] = winnerData;
+            }
+
+            const parts = matchId.split('-');
+            const category = parts[0];
+            const roundKey = parts[1];
+            let matchIndex = parseInt(parts[3], 10);
+            const currentRoundIndex = rounds.findIndex(r => r.key === roundKey);
+
+            for (let i = currentRoundIndex + 1; i < rounds.length; i++) {
+                const nextRoundKey = rounds[i].key;
+                matchIndex = Math.floor(matchIndex / 2);
+                const nextMatchId = `${category}-${nextRoundKey}-match-${matchIndex}`;
+                if (newPicks[nextMatchId]) delete newPicks[nextMatchId];
+            }
+            
+            const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", currentUserId);
+            await setDoc(userDocRef, { picks: newPicks }, { merge: true });
+        }
+        
+        function renderSubmissionArea() {
+            const submissionArea = document.getElementById('submission-area');
+            const totalMatches = 62;
+            const picksCount = Object.keys(userProfile.picks || {}).length;
+
+            if (picksCount >= totalMatches) {
+                submissionArea.innerHTML = `<button id="lock-bracket-btn" class="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 transition-colors text-xl">Lock In Your Final Bracket</button>`;
+                document.getElementById('lock-bracket-btn').addEventListener('click', lockBracket);
+            } else {
+                submissionArea.innerHTML = `<p class="text-lg text-gray-600">You have made ${picksCount} of ${totalMatches} required picks.</p>`;
+            }
+        }
+
+        async function lockBracket() {
+            if (window.confirm("Are you sure you want to lock your bracket? You will not be able to make any more changes.")) {
+                const userDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", currentUserId);
+                await setDoc(userDocRef, { isLocked: true }, { merge: true });
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
