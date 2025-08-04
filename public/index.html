@@ -204,7 +204,7 @@
             statusText.textContent = "Viewing results.";
             
             const displayParticipants = [
-                { name: "Actual Results", picks: viewerData.actual_results, score: null },
+                { name: "Actual Results", picks: viewerData.actual_results, score: null, fullName: "Official Tournament Results" },
                 ...viewerData.participants
             ];
 
@@ -214,7 +214,7 @@
             const createParticipantSelectorHTML = (position) => `
                 <div id="participant-selector-${position}" class="participant-selector">
                     ${displayParticipants.map((p, index) => `
-                        <button data-index="${index - 1}" class="participant-btn ${index === activeDisplayIndex ? 'active' : ''}">
+                        <button data-index="${index - 1}" class="participant-btn ${index === activeDisplayIndex ? 'active' : ''}" title="${p.fullName}">
                             ${p.name}
                         </button>
                     `).join('')}
@@ -228,7 +228,7 @@
                         <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Max Potential</th></tr></thead>
                         <tbody>
                             ${viewerData.participants.map((p, index) => `
-                                <tr class="cursor-pointer hover:bg-gray-100" data-index="${index}">
+                                <tr class="cursor-pointer hover:bg-gray-100" data-index="${index}" title="${p.fullName}">
                                     <td class="font-bold">${p.rank}</td>
                                     <td>${p.name}</td>
                                     <td>${p.score}</td>
