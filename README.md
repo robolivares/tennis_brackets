@@ -18,6 +18,24 @@ This project is a modern, fully-featured platform for running real-time tennis t
 * `/functions/`: Contains the backend Cloud Function code (`main.py`) responsible for automatic score calculation.
 * `/scripts/`: Contains optional helper scripts, such as a manual score calculator (`calculate_scores.py`) for backup or testing purposes.
 
+## Application States & Configuration
+
+The user experience is controlled by two main flags in `public/app-config.js`. You will typically change these settings and redeploy the site as the tournament progresses.
+
+* **State 1: Picking (Day 1)**
+    * `CURRENT_TOURNAMENT_DAY: 1`
+    * `VIEWER_MODE_ENABLED: false`
+    * **Effect:** Users can only select winners for matches scheduled on Day 1 of the Round of 32. This prevents users from having an advantage by seeing the results of the first day's matches before picking the second.
+
+* **State 2: Picking (Day 2)**
+    * `CURRENT_TOURNAMENT_DAY: 2`
+    * `VIEWER_MODE_ENABLED: false`
+    * **Effect:** After Day 1 matches are complete, you change this setting and redeploy. All Round of 32 matches are now selectable, and users can complete their brackets.
+
+* **State 3: Viewer Mode (Tournament Live)**
+    * `VIEWER_MODE_ENABLED: true`
+    * **Effect:** This is the master switch. Once the tournament begins and the deadline for submissions has passed, you set this to `true` and redeploy. This locks all brackets and turns the site into a read-only leaderboard for everyone to follow along.
+
 ## Full Workflow: From Setup to Sharing
 
 ### Step 1: Firebase Setup (One-Time)
@@ -36,13 +54,13 @@ This project is a modern, fully-featured platform for running real-time tennis t
 1.  **Clone the Repository:** Clone this project from GitHub to your local machine.
 2.  **Configure the Website:**
     * In the `/public` directory, rename `app-config.js.template` to `app-config.js`.
-    * Paste your `firebaseConfig` credentials into this new file and set your `TOURNAMENT_ID`.
+    * Paste your `firebaseConfig` credentials into this new file and set your tournament configuration (`TOURNAMENT_NAME`, `TOURNAMENT_ID`, etc.).
     * **IMPORTANT:** The `.gitignore` file is already configured to ignore `app-config.js`, so your secrets will **not** be committed to GitHub.
 3.  **Configure the Cloud Function:**
     * Follow the Firebase documentation to generate a `serviceAccountKey.json` file for your project.
     * Place this key file inside the `/functions` directory. The `.gitignore` will also keep this file private.
 4.  **Generate Tournament Data:**
-    * Create a file named `entrants.txt` in the root of your project.
+    * Create a file named `entrants.txt` in the root of your project with the tournament matchups.
     * Add the matchups in the following format, specifying the day for each half of the draw. The seed is optional.
         ```
         mens
