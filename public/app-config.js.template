@@ -15,6 +15,9 @@ export const firebaseConfig = {
 };
 
 export const appConfig = {
+  // The name of the tournament, which will be displayed as the main title.
+  TOURNAMENT_NAME: 'US Open 2024 Challenge',
+
   // This ID creates a unique "folder" in your database for this specific tournament's data.
   // Change this for each new tournament (e.g., 'wimbledon2024', 'ausopen2025').
   TOURNAMENT_ID: 'usopen2024',
