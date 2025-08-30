@@ -76,7 +76,6 @@ def generate_tournament_json(data, output_path):
         "womens_draw": process_draw(data['womens'])
     }
 
-    # Ensure the output directory exists
     output_dir = os.path.dirname(output_path)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -96,31 +95,31 @@ if __name__ == "__main__":
     print("--- Tournament JSON Generator ---")
     parsed_data = parse_entrants(args.entrants)
     if parsed_data:
+        # *** NEW: Pad out any partially filled sections to ensure a full draw ***
         placeholder_match = [['', 'TBD'], ['', 'TBD']]
         for category in ['mens', 'womens']:
-            if not parsed_data[category]['top']:
-                parsed_data[category]['top'] = [placeholder_match for _ in range(8)]
-            if not parsed_data[category]['bottom']:
-                parsed_data[category]['bottom'] = [placeholder_match for _ in range(8)]
+            for half in ['top', 'bottom']:
+                num_matches = len(parsed_data[category][half])
+                if 0 < num_matches < 8:
+                    print(f"'{category.title()}' {half.title()} Half is partially filled ({num_matches}/8). Padding with placeholders.")
+                    needed = 8 - num_matches
+                    parsed_data[category][half].extend([placeholder_match for _ in range(needed)])
+                elif num_matches == 0:
+                     parsed_data[category][half] = [placeholder_match for _ in range(8)]
 
-        if len(parsed_data['mens']['top']) != 8 or len(parsed_data['mens']['bottom']) != 8 or \
-           len(parsed_data['womens']['top']) != 8 or len(parsed_data['womens']['bottom']) != 8:
-            print("\nError: A section in your entrants.txt has an incorrect number of matchups. Each half must have exactly 8 matches.")
-        else:
-            # Generate the primary file for the website
-            generate_tournament_json(parsed_data, args.output)
 
-            # If the storage_output path is provided, create a copy there
-            if args.storage_output:
-                try:
-                    storage_dir = os.path.dirname(args.storage_output)
-                    if storage_dir:
-                        os.makedirs(storage_dir, exist_ok=True)
+        generate_tournament_json(parsed_data, args.output)
 
-                    shutil.copy(args.output, args.storage_output)
-                    print(f"Successfully created copy for Firebase Storage at: {args.storage_output}")
-                except Exception as e:
-                    print(f"\nError: Could not copy file to storage path: {e}")
+        if args.storage_output:
+            try:
+                storage_dir = os.path.dirname(args.storage_output)
+                if storage_dir:
+                    os.makedirs(storage_dir, exist_ok=True)
 
-            print("\nSetup complete!")
+                shutil.copy(args.output, args.storage_output)
+                print(f"Successfully created copy for Firebase Storage at: {args.storage_output}")
+            except Exception as e:
+                print(f"\nError: Could not copy file to storage path: {e}")
+
+        print("\nSetup complete!")
 

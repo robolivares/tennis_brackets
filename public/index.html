@@ -28,6 +28,7 @@
         .leaderboard { max-width: 800px; margin: 2rem auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .leaderboard th, .leaderboard td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
         .leaderboard th { font-weight: bold; color: #4A0072; }
+        .leaderboard th.sortable { cursor: pointer; }
         .leaderboard tr:last-child td { border-bottom: none; }
         .viewer-bracket { border: 2px solid #4A0072; margin-top: 2rem; border-radius: 8px; padding-bottom: 1rem; }
         .player-name.correct-pick { color: #059669; font-weight: bold; }
@@ -78,6 +79,8 @@
         let activePickerView = 'bracket';
         let currentlyViewedParticipantIndex = -1; // -1 for "Actual Results"
         let isInitialView = true;
+        let leaderboardSortKey = 'score';
+        let leaderboardSortOrder = 'desc';
 
         const mainContent = document.getElementById('main-content');
         const statusText = document.getElementById('status-text');
@@ -85,17 +88,24 @@
 
         const rounds = [ { name: "Round of 32", key: "r32" }, { name: "Round of 16", key: "r16" }, { name: "Quarterfinals", key: "qf" }, { name: "Semifinals", key: "sf" }, { name: "Final", key: "f" } ];
 
+        // Make sort function globally available for onclick handlers
+        window.sortLeaderboard = (key) => {
+            if (leaderboardSortKey === key) {
+                leaderboardSortOrder = leaderboardSortOrder === 'desc' ? 'asc' : 'desc';
+            } else {
+                leaderboardSortKey = key;
+                leaderboardSortOrder = 'desc';
+            }
+            renderViewerMode();
+        };
+
         async function init() {
             try {
                 const configModule = await import(`./app-config.js?v=${new Date().getTime()}`);
                 appConfig = configModule.appConfig;
                 firebaseConfig = configModule.firebaseConfig;
-
-                // Set the main title from the config
                 document.getElementById('main-title').textContent = appConfig.TOURNAMENT_NAME || 'Bracket Challenge';
                 document.title = appConfig.TOURNAMENT_NAME || 'Bracket Challenge';
-
-
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
@@ -227,15 +237,33 @@
                     `).join('')}
                 </div>
             `;
+            
+            const sortedParticipants = [...viewerData.participants].sort((a, b) => {
+                const valA = a[leaderboardSortKey];
+                const valB = b[leaderboardSortKey];
+                return leaderboardSortOrder === 'desc' ? valB - valA : valA - valB;
+            });
+
+            const sortIndicator = (key) => {
+                if (leaderboardSortKey === key) {
+                    return leaderboardSortOrder === 'desc' ? '▼' : '▲';
+                }
+                return '';
+            };
 
             let html = `
                 <div class="leaderboard">
                     <h2 class="text-3xl font-bold text-center mb-6 text-purple-900">Leaderboard</h2>
                     <table class="w-full text-lg">
-                        <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>Max Potential</th></tr></thead>
+                        <thead><tr>
+                            <th>Rank</th>
+                            <th>Name</th>
+                            <th class="sortable" onclick="sortLeaderboard('score')">Score ${sortIndicator('score')}</th>
+                            <th class="sortable" onclick="sortLeaderboard('max_score')">Max Potential ${sortIndicator('max_score')}</th>
+                        </tr></thead>
                         <tbody>
-                            ${viewerData.participants.map((p, index) => `
-                                <tr class="cursor-pointer hover:bg-gray-100" data-index="${index}" title="${p.fullName}">
+                            ${sortedParticipants.map((p, index) => `
+                                <tr class="cursor-pointer hover:bg-gray-100" data-index="${viewerData.participants.findIndex(orig => orig.fullName === p.fullName)}" title="${p.fullName}">
                                     <td class="font-bold">${p.rank}</td>
                                     <td>${p.name}</td>
                                     <td>${p.score}</td>
