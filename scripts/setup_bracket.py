@@ -2,124 +2,98 @@ import json
 import os
 import re
 import argparse
-import shutil
+import math
 
 def parse_entrants(filepath="entrants.txt"):
     """
-    Parses entrants.txt, reading headers like "Top Half (Day 1)" to determine
-    the schedule for each half of the draw. Preserves player name capitalization.
+    Parses entrants.txt to collect matchups.
+    Ignores deprecated Day/Half headers and focuses on 'Player vs Player'.
     """
     if not os.path.exists(filepath):
         print(f"Error: Entrants file not found at '{filepath}'")
         return None
 
-    parsed_data = {
-        'mens': {'top': [], 'bottom': [], 'top_day': 0, 'bottom_day': 0},
-        'womens': {'top': [], 'bottom': [], 'top_day': 0, 'bottom_day': 0}
-    }
+    parsed_data = {'mens': [], 'womens': []}
     current_category = None
-    current_half = None
-    header_regex = re.compile(r"(top|bottom)\s+half\s+\(day\s*([12])\)")
-    player_regex = re.compile(r"\((.*?)\)\s*(.*)|(^[^\(]+)")
+    player_regex = re.compile(r"(?:\((.*?)\))?\s*(.*)")
 
     def parse_player(p_str):
-        match = player_regex.match(p_str.strip())
+        p_str = p_str.strip()
+        if not p_str or p_str.upper() == "TBD":
+            return ["", "TBD"]
+        match = player_regex.match(p_str)
         if match:
-            if match.group(1) is not None: return (match.group(1), match.group(2).strip())
-            elif match.group(3) is not None: return ("", match.group(3).strip())
-        return ("", p_str)
+            seed = match.group(1) or ""
+            name = match.group(2).strip() or "TBD"
+            return [seed, name]
+        return ["", p_str]
 
     with open(filepath, 'r', encoding='utf-8') as f:
-        for original_line in f:
-            line_stripped = original_line.strip()
-            line_lower = line_stripped.lower()
-            if not line_stripped: continue
+        for line in f:
+            line = line.strip()
+            if not line: continue
 
-            if line_lower == 'mens':
+            if line.lower() == 'mens':
                 current_category = 'mens'
-                current_half = None
                 continue
-            elif line_lower == 'womens':
+            elif line.lower() == 'womens':
                 current_category = 'womens'
-                current_half = None
                 continue
 
-            header_match = header_regex.match(line_lower)
-            if header_match and current_category:
-                half, day = header_match.groups()
-                current_half = half
-                parsed_data[current_category][f'{half}_day'] = int(day)
-                continue
-
-            if 'vs' in line_lower and current_category and current_half:
-                parts = re.split(r'\s+vs\s+', line_stripped, flags=re.IGNORECASE)
+            if ' vs ' in line.lower() and current_category:
+                parts = re.split(r'\s+vs\s+', line, flags=re.IGNORECASE)
                 if len(parts) == 2:
-                    p1_str, p2_str = parts
-                    player1 = parse_player(p1_str)
-                    player2 = parse_player(p2_str)
-                    parsed_data[current_category][current_half].append([player1, player2])
+                    p1 = parse_player(parts[0])
+                    p2 = parse_player(parts[1])
+                    parsed_data[current_category].append({"players": [p1, p2]})
 
     return parsed_data
 
 def generate_tournament_json(data, output_path):
     """
-    Saves the parsed tournament data to a JSON file with a unified structure.
-    Each R32 matchup is tagged with its play day.
+    Calculates the target power of 2 for padding and generates the JSON.
     """
-    def process_draw(category_data):
-        top_matchups = [{'players': match, 'day': category_data['top_day']} for match in category_data['top']]
-        bottom_matchups = [{'players': match, 'day': category_data['bottom_day']} for match in category_data['bottom']]
-        return top_matchups + bottom_matchups
+    # Valid match counts for common starting rounds
+    # 8 (R16), 16 (R32), 32 (R64), 64 (R128)
+    VALID_SIZES = [8, 16, 32, 64]
 
-    tournament_config = {
-        "mens_draw": process_draw(data['mens']),
-        "womens_draw": process_draw(data['womens'])
-    }
+    # Determine the target size based on the largest draw provided
+    max_found = max(len(data['mens']), len(data['womens']))
 
-    output_dir = os.path.dirname(output_path)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+    # Find the smallest valid size that can hold all matches
+    target_size = 16 # Default to R32
+    for size in VALID_SIZES:
+        if max_found <= size:
+            target_size = size
+            break
+
+    print(f"Detected target draw size: {target_size} matches.")
+
+    final_config = {}
+    placeholder = {"players": [["", "TBD"], ["", "TBD"]]}
+
+    for cat in ['mens', 'womens']:
+        draw = data[cat]
+        current_len = len(draw)
+
+        if current_len < target_size:
+            print(f"Padding {cat.title()} draw: {current_len}/{target_size} matches found.")
+            draw.extend([placeholder] * (target_size - current_len))
+
+        final_config[f"{cat}_draw"] = draw[:target_size]
 
     with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(tournament_config, f, indent=4)
-    print(f"Successfully generated primary tournament data at: {output_path}")
+        json.dump(final_config, f, indent=4)
+    print(f"Successfully generated: {output_path}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate tournament_data.json from an entrants text file.")
-    parser.add_argument('-e', '--entrants', default='entrants.txt', help="Path to the entrants text file.")
-    parser.add_argument('-o', '--output', default='public/tournament_data.json', help="Path for the primary output JSON file for the website.")
-    parser.add_argument('-s', '--storage_output', help="Optional path for the second output JSON file for Firebase Storage.")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-e', '--entrants', default='entrants.txt')
+    parser.add_argument('-o', '--output', default='public/tournament_data.json')
     args = parser.parse_args()
 
-    print("--- Tournament JSON Generator ---")
-    parsed_data = parse_entrants(args.entrants)
-    if parsed_data:
-        # *** NEW: Pad out any partially filled sections to ensure a full draw ***
-        placeholder_match = [['', 'TBD'], ['', 'TBD']]
-        for category in ['mens', 'womens']:
-            for half in ['top', 'bottom']:
-                num_matches = len(parsed_data[category][half])
-                if 0 < num_matches < 8:
-                    print(f"'{category.title()}' {half.title()} Half is partially filled ({num_matches}/8). Padding with placeholders.")
-                    needed = 8 - num_matches
-                    parsed_data[category][half].extend([placeholder_match for _ in range(needed)])
-                elif num_matches == 0:
-                     parsed_data[category][half] = [placeholder_match for _ in range(8)]
-
-
-        generate_tournament_json(parsed_data, args.output)
-
-        if args.storage_output:
-            try:
-                storage_dir = os.path.dirname(args.storage_output)
-                if storage_dir:
-                    os.makedirs(storage_dir, exist_ok=True)
-
-                shutil.copy(args.output, args.storage_output)
-                print(f"Successfully created copy for Firebase Storage at: {args.storage_output}")
-            except Exception as e:
-                print(f"\nError: Could not copy file to storage path: {e}")
-
-        print("\nSetup complete!")
+    print("--- Dynamic Tournament Generator ---")
+    tournament_data = parse_entrants(args.entrants)
+    if tournament_data:
+        generate_tournament_json(tournament_data, args.output)
 
