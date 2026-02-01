@@ -24,11 +24,21 @@ export const appConfig = {
 
   // This controls which round of 32 matches are selectable.
   // Set to 1 for the first day, then change to 2 and redeploy for the second day.
-  CURRENT_TOURNAMENT_DAY: 1,
+  CURRENT_TOURNAMENT_DAY: 1, //deprecated
 
   // This is the master switch for the entire app.
   // false = The app is in "bracket picking" mode.
   // true = The app is in "results viewer" mode.
   VIEWER_MODE_ENABLED: false
+  //'r32' (for Round of 32)
+  //'r16' (for Round of 16)
+  //'qf' (for Quarterfinals)
+  //'sf' (for Semifinals)
+  //'f' (for Final)
+  DEFAULT_VIEWER_ROUND: "sf",
+
+  STARTING_ROUND: 'r32',          // 'r128', 'r32'
 };
+
+
 

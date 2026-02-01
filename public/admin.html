@@ -8,24 +8,43 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>body { font-family: 'Inter', sans-serif; }</style>
 </head>
-<body class="bg-gray-200">
+<body class="bg-gray-100">
 
-    <div class="container mx-auto p-4 max-w-4xl">
-        <h1 class="text-3xl font-bold text-center text-gray-800 my-6">Bracket Admin Panel</h1>
+    <div class="container mx-auto p-4 max-w-5xl">
+        <h1 class="text-3xl font-black text-center text-indigo-900 my-8 uppercase tracking-tighter">
+            🇦🇺 Aussie Open '26 Admin
+        </h1>
 
-        <!-- Password View -->
-        <div id="password-view" class="bg-white p-8 rounded-lg shadow-md text-center">
-            <h2 class="text-2xl font-bold mb-4">Enter Admin Password</h2>
-            <input type="password" id="password-input" class="w-full max-w-xs mx-auto px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600" placeholder="Password">
-            <button id="login-btn" class="block w-full max-w-xs mx-auto bg-purple-700 text-white font-bold py-3 mt-4 rounded-lg hover:bg-purple-800 transition-colors">
-                Login
+        <div id="password-view" class="bg-white p-10 rounded-2xl shadow-xl text-center max-w-md mx-auto">
+            <h2 class="text-xl font-bold mb-6">Staff Access Only</h2>
+            <input type="password" id="password-input" class="w-full px-4 py-3 border-2 rounded-xl focus:ring-2 focus:ring-indigo-500 mb-4" placeholder="Enter Password">
+            <button id="login-btn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-all">
+                Login to Dashboard
             </button>
-            <p id="error-message" class="text-red-500 mt-4 h-4"></p>
+            <p id="error-message" class="text-red-500 mt-4 text-sm font-medium"></p>
         </div>
 
-        <!-- Admin Content View -->
         <div id="admin-content" class="hidden">
-            <!-- This area will be populated by JavaScript -->
+            <div class="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm">
+                <p class="font-medium text-gray-500">Tournament ID: <span id="tourn-id-display" class="text-indigo-600 font-bold"></span></p>
+                <div class="flex gap-4">
+                     <span id="save-status" class="text-sm font-bold self-center"></span>
+                     <button id="save-results-btn" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 shadow-md">
+                        Save Results
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-black mb-6 text-indigo-800 border-b pb-2">Men's Draw</h2>
+                    <div id="mens-results" class="space-y-2"></div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-black mb-6 text-indigo-800 border-b pb-2">Women's Draw</h2>
+                    <div id="womens-results" class="space-y-2"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -36,179 +55,126 @@
         
         const ADMIN_PASSWORD = "your-secret-password"; 
 
-        let db, auth;
-        let tournamentData = null;
-        let actualResults = {};
-        let appConfig;
-        let seedMap = { mens: {}, womens: {} };
+        const ALL_ROUNDS = [
+            { key: 'r128', name: 'Round of 128', matches: 64 },
+            { key: 'r64', name: 'Round of 64', matches: 32 },
+            { key: 'r32', name: 'Round of 32', matches: 16 },
+            { key: 'r16', name: 'Round of 16', matches: 8 },
+            { key: 'qf', name: 'Quarterfinals', matches: 4 },
+            { key: 'sf', name: 'Semifinals', matches: 2 },
+            { key: 'f', name: 'Final', matches: 1 }
+        ];
 
-        const passwordView = document.getElementById('password-view');
-        const adminContent = document.getElementById('admin-content');
-        const passwordInput = document.getElementById('password-input');
+        let db, auth, appConfig, tournamentData;
+        let activeRounds = [];
+        let actualResults = {};
+
         const loginBtn = document.getElementById('login-btn');
-        const errorMessage = document.getElementById('error-message');
+        const passwordInput = document.getElementById('password-input');
 
         loginBtn.addEventListener('click', handleLogin);
-        passwordInput.addEventListener('keyup', (event) => {
-            if (event.key === 'Enter') handleLogin();
-        });
+        passwordInput.addEventListener('keyup', (e) => e.key === 'Enter' && handleLogin());
 
         async function handleLogin() {
             if (passwordInput.value !== ADMIN_PASSWORD) {
-                errorMessage.textContent = "Incorrect password.";
+                document.getElementById('error-message').textContent = "Incorrect password.";
                 return;
             }
-            errorMessage.textContent = 'Logging in...';
+
             try {
                 const configModule = await import('./app-config.js');
                 appConfig = configModule.appConfig;
+                
                 const app = initializeApp(configModule.firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 await signInAnonymously(auth);
+
+                const startIdx = ALL_ROUNDS.findIndex(r => r.key === appConfig.STARTING_ROUND);
+                activeRounds = ALL_ROUNDS.slice(startIdx);
+                
                 await loadData();
                 showAdminView();
-            } catch (error) {
-                console.error("Login or Initialization Failed:", error);
-                errorMessage.textContent = `Error: ${error.message}`;
+            } catch (err) {
+                document.getElementById('error-message').textContent = `Initialization Error: ${err.message}`;
             }
-        }
-
-        function showAdminView() {
-            passwordView.classList.add('hidden');
-            adminContent.classList.remove('hidden');
-            renderAllForms();
         }
 
         async function loadData() {
-            try {
-                const response = await fetch(`tournament_data.json?v=${new Date().getTime()}`);
-                if (!response.ok) throw new Error('Could not fetch tournament_data.json.');
-                tournamentData = await response.json();
+            const res = await fetch(`tournament_data.json?v=${Date.now()}`);
+            tournamentData = await res.json();
+            document.getElementById('tourn-id-display').textContent = appConfig.TOURNAMENT_ID;
 
-                // Create a seed map for easy lookup
-                seedMap.mens = Object.fromEntries(tournamentData.mens_draw.flatMap(m => m.players).map(p => [p[1], p[0]]));
-                seedMap.womens = Object.fromEntries(tournamentData.womens_draw.flatMap(m => m.players).map(p => [p[1], p[0]]));
-
-                const resultsDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults");
-                const docSnap = await getDoc(resultsDocRef);
-                if (docSnap.exists()) {
-                    actualResults = docSnap.data().winners || {};
-                }
-            } catch (error) {
-                adminContent.innerHTML = `<p class="text-red-500 text-center text-lg p-8 bg-white rounded-lg shadow-md">${error.message}</p>`;
-                adminContent.classList.remove('hidden');
-                throw error;
-            }
+            const resultsDoc = await getDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults"));
+            if (resultsDoc.exists()) actualResults = resultsDoc.data().winners || {};
         }
 
-        function renderAllForms() {
-            adminContent.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                        <h2 class="text-2xl font-bold mb-4 text-center">Men's Results</h2>
-                        <div id="mens-results" class="space-y-4 bg-white p-6 rounded-lg shadow-md"></div>
-                    </div>
-                    <div>
-                        <h2 class="text-2xl font-bold mb-4 text-center">Women's Results</h2>
-                        <div id="womens-results" class="space-y-4 bg-white p-6 rounded-lg shadow-md"></div>
-                    </div>
-                </div>
-                <div class="text-center mt-8">
-                    <button id="save-results-btn" class="bg-green-600 text-white font-bold py-4 px-10 rounded-lg hover:bg-green-700 transition-colors text-xl">
-                        Save All Results
-                    </button>
-                    <p id="save-status" class="mt-4 h-6 text-lg"></p>
-                </div>
-            `;
+        function showAdminView() {
+            document.getElementById('password-view').classList.add('hidden');
+            document.getElementById('admin-content').classList.remove('hidden');
+            renderForms();
+        }
 
+        function renderForms() {
             document.getElementById('mens-results').innerHTML = createFormHTML(tournamentData.mens_draw, 'mens');
             document.getElementById('womens-results').innerHTML = createFormHTML(tournamentData.womens_draw, 'womens');
             
-            document.getElementById('save-results-btn').addEventListener('click', saveResults);
-            adminContent.querySelectorAll('select').forEach(select => {
-                select.addEventListener('change', (e) => {
-                    const matchId = e.target.id;
-                    const selectedOption = e.target.options[e.target.selectedIndex];
-                    const winnerName = selectedOption.value;
-                    
-                    if (winnerName) {
-                        const winnerSeed = selectedOption.dataset.seed;
-                        actualResults[matchId] = [winnerSeed, winnerName];
-                    } else {
-                        delete actualResults[matchId];
-                    }
-                    renderAllForms();
-                });
+            document.getElementById('save-results-btn').onclick = saveResults;
+            document.querySelectorAll('select').forEach(sel => sel.onchange = (e) => {
+                if (e.target.value) actualResults[e.target.id] = e.target.value;
+                else delete actualResults[e.target.id];
+                renderForms(); // Re-render to propagate winners to next round
             });
         }
 
-        function createFormHTML(drawData, category) {
+        function createFormHTML(draw, category) {
             let html = '';
-            const rounds = ["r32", "r16", "qf", "sf", "f"];
-            const roundNames = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Final"];
-            
-            let previousRoundWinners = {};
+            let prevWinners = {};
 
-            rounds.forEach((roundKey, roundIndex) => {
-                html += `<h3 class="text-lg font-bold mt-4 border-b pb-2">${roundNames[roundIndex]}</h3>`;
-                const numMatches = 16 / Math.pow(2, roundIndex);
+            activeRounds.forEach((round, roundIdx) => {
+                html += `<h3 class="text-xs font-bold uppercase tracking-widest text-indigo-400 mt-6 mb-2">${round.name}</h3>`;
+                
+                for (let i = 0; i < round.matches; i++) {
+                    const matchId = `${category}-${round.key}-match-${i}`;
+                    let p1 = 'TBD', p2 = 'TBD';
 
-                for (let i = 0; i < numMatches; i++) {
-                    const matchId = `${category}-${roundKey}-match-${i}`;
-                    let p1 = ['', 'TBD'], p2 = ['', 'TBD'];
-
-                    if (roundIndex === 0) {
-                        p1 = drawData[i].players[0];
-                        p2 = drawData[i].players[1];
+                    if (roundIdx === 0) {
+                        p1 = draw[i].players[0][1];
+                        p2 = draw[i].players[1][1];
                     } else {
-                        const prevRoundKey = rounds[roundIndex - 1];
-                        p1 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2}`] || ['', 'TBD'];
-                        p2 = previousRoundWinners[`${category}-${prevRoundKey}-match-${i * 2 + 1}`] || ['', 'TBD'];
+                        const prevKey = activeRounds[roundIdx - 1].key;
+                        p1 = prevWinners[`${category}-${prevKey}-match-${i * 2}`] || 'TBD';
+                        p2 = prevWinners[`${category}-${prevKey}-match-${i * 2 + 1}`] || 'TBD';
                     }
                     
-                    const selectedWinnerData = actualResults[matchId];
-                    const selectedWinnerName = selectedWinnerData ? selectedWinnerData[1] : null;
-                    if(selectedWinnerData) {
-                        previousRoundWinners[matchId] = selectedWinnerData;
-                    }
-
-                    const isDisabled = p1[1] === 'TBD' || p2[1] === 'TBD';
+                    if (actualResults[matchId]) prevWinners[matchId] = actualResults[matchId];
+                    const isDisabled = p1 === 'TBD' || p2 === 'TBD';
 
                     html += `
-                        <div class="p-2 border-b">
-                            <label class="block text-sm font-medium text-gray-600">${p1[1]} vs ${p2[1]}</label>
-                            <select id="${matchId}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" ${isDisabled ? 'disabled' : ''}>
-                                <option value="">-- Select Winner --</option>
-                                <option value="${p1[1]}" data-seed="${p1[0]}" ${selectedWinnerName === p1[1] ? 'selected' : ''}>${p1[1]}</option>
-                                <option value="${p2[1]}" data-seed="${p2[0]}" ${selectedWinnerName === p2[1] ? 'selected' : ''}>${p2[1]}</option>
+                        <div class="p-2 border-b border-gray-100 flex items-center justify-between gap-2">
+                            <span class="text-[10px] font-mono text-gray-300">#${i}</span>
+                            <select id="${matchId}" class="flex-1 text-xs border-gray-200 rounded p-1 ${isDisabled ? 'bg-gray-50' : ''}" ${isDisabled ? 'disabled' : ''}>
+                                <option value="">Winner?</option>
+                                <option value="${p1}" ${actualResults[matchId] === p1 ? 'selected' : ''}>${p1}</option>
+                                <option value="${p2}" ${actualResults[matchId] === p2 ? 'selected' : ''}>${p2}</option>
                             </select>
-                        </div>
-                    `;
+                        </div>`;
                 }
             });
             return html;
         }
 
         async function saveResults() {
-            const saveStatus = document.getElementById('save-status');
-            saveStatus.textContent = "Saving...";
-            saveStatus.classList.remove('text-green-600', 'text-red-500');
-
+            const status = document.getElementById('save-status');
+            status.textContent = "⌛ Saving...";
             try {
-                const resultsDocRef = doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults");
-                await setDoc(resultsDocRef, { winners: actualResults });
-                saveStatus.textContent = "Results saved successfully!";
-                saveStatus.classList.add('text-green-600');
-            } catch (error) {
-                console.error("Save Error:", error);
-                saveStatus.textContent = "Error saving results. Check console.";
-                saveStatus.classList.add('text-red-500');
-            } finally {
-                setTimeout(() => saveStatus.textContent = '', 4000);
+                await setDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults"), { winners: actualResults });
+                status.textContent = "✅ Saved!";
+                setTimeout(() => status.textContent = '', 3000);
+            } catch (err) {
+                status.textContent = "❌ Error";
             }
         }
     </script>
 </body>
 </html>
-
