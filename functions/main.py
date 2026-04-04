@@ -31,6 +31,7 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
         print(f"Error loading tournament file: {e}")
         return
 
+    # Determine start round based on match count (e.g., 64 matches = r128)
     match_count = len(initial_entrants.get('mens_draw', []))
     match_to_round = {64: 'r128', 32: 'r64', 16: 'r32', 8: 'r16'}
     start_round = match_to_round.get(match_count, 'r128')
@@ -48,7 +49,7 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
 
     def get_seed_num(name, category):
         seed_str = seed_map.get(category, {}).get(name, "")
-        if not seed_str or seed_str in ["Q", "WC", "LL"]: return 0
+        if not seed_str or any(x in seed_str for x in ["Q", "WC", "LL"]): return 0
         return int(''.join(filter(str.isdigit, seed_str)))
 
     eliminated_players = get_eliminated_players(initial_entrants, actual_results, start_round)
@@ -58,7 +59,13 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
     leaderboard = []
 
     for p in participants:
-        if not p.get('isLocked'): continue
+        # UPDATED LOCK LOGIC: Check if ANY day is locked for Mens or Womens (e.g., isLockedMensDay1)
+        is_m_locked = any(val for key, val in p.items() if key.startswith('isLockedMens') and val is True)
+        is_w_locked = any(val for key, val in p.items() if key.startswith('isLockedWomens') and val is True)
+
+        # If the user hasn't locked anything yet, they don't appear on the leaderboard
+        if not is_w_locked and not is_m_locked:
+            continue
 
         picks = p.get('picks', {})
         current_score = 0
@@ -67,11 +74,15 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
         for match_id, picked_winner_data in picks.items():
             picked_name = (picked_winner_data[1] if isinstance(picked_winner_data, list) else picked_winner_data).strip()
 
-            # FIX: Use startswith to avoid substring collision (e.g., 'womens' containing 'mens')
-            category = 'mens' if match_id.startswith('mens') else 'womens'
+            is_mens = match_id.startswith('mens')
+            category = 'mens' if is_mens else 'womens'
+
+            # Only score the specific category if at least one day is locked for it
+            if is_mens and not is_m_locked: continue
+            if not is_mens and not is_w_locked: continue
+
             round_key = match_id.split('-')[1]
             base_points = BASE_POINTS.get(round_key, 0)
-
             actual_winner_data = actual_results.get(match_id)
 
             if actual_winner_data:
@@ -86,18 +97,16 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
 
                     if w_seed == 0 and o_seed > 0:
                         bonus = 6 if not is_week_1 else 2
-                    elif 17 <= w_seed <= 33 and 1 <= o_seed <= 16:
+                    elif 17 <= w_seed <= 34 and 1 <= o_seed <= 16:
                         bonus = 3 if not is_week_1 else 1
 
                     current_score += (base_points + bonus)
 
             elif picked_name in active_players:
-                # IMPROVEMENT: Calculate potential based on specific pick's upset potential
                 potential_bonus = 0
                 is_week_1_pot = round_key in ["r128", "r64", "r32"]
                 w_seed_pot = get_seed_num(picked_name, category)
 
-                # Assume "best case" for the user's specific pick
                 if w_seed_pot == 0:
                     potential_bonus = 6 if not is_week_1_pot else 2
                 elif 17 <= w_seed_pot <= 33:
@@ -125,8 +134,6 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
 
 def get_opponent_name(match_id, winner_name, initial_entrants, actual_results, start_round):
     parts = match_id.split('-')
-
-    # FIX: Use startswith for accurate draw selection
     category_key = 'mens_draw' if match_id.startswith('mens') else 'womens_draw'
     round_key, match_idx = parts[1], int(parts[-1])
 
@@ -135,7 +142,6 @@ def get_opponent_name(match_id, winner_name, initial_entrants, actual_results, s
         p1, p2 = players[0][1], players[1][1]
         return p2 if p1 == winner_name else p1
 
-    # For later rounds, look at the winners of the previous feeder matches
     prev_round_idx = ROUNDS.index(round_key) - 1
     prev_round_key = ROUNDS[prev_round_idx]
     m1_id = f"{parts[0]}-{prev_round_key}-match-{match_idx * 2}"
@@ -155,8 +161,6 @@ def get_eliminated_players(initial_entrants, actual_results, start_round):
     for match_id, winner_data in actual_results.items():
         winner_name = (winner_data[1] if isinstance(winner_data, list) else winner_data).strip()
         parts = match_id.split('-')
-
-        # FIX: Use startswith for accurate draw selection
         category_key = 'mens_draw' if match_id.startswith('mens') else 'womens_draw'
         round_key, match_idx = parts[1], int(parts[-1])
 

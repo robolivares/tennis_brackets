@@ -24,7 +24,7 @@ export const appConfig = {
 
   // This controls which round of 32 matches are selectable.
   // Set to 1 for the first day, then change to 2 and redeploy for the second day.
-  CURRENT_TOURNAMENT_DAY: 1, //deprecated
+  CURRENT_TOURNAMENT_DAY: 1, 
 
   // This is the master switch for the entire app.
   // false = The app is in "bracket picking" mode.
