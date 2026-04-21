@@ -22,6 +22,11 @@ export const appConfig = {
   // Change this for each new tournament (e.g., 'wimbledon2024', 'ausopen2025').
   TOURNAMENT_ID: 'usopen2024',
 
+  // NEW: EXTRA SCORING TOGGLE
+  // false = Standard scoring only.
+  // true = Awards bonus points if a user correctly guesses 75% or 100% of a round.
+  USE_ROUND_BONUSES: true,
+
   // This controls which round of 32 matches are selectable.
   // Set to 1 for the first day, then change to 2 and redeploy for the second day.
   CURRENT_TOURNAMENT_DAY: 1, 
