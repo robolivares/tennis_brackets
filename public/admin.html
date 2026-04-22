@@ -12,7 +12,7 @@
 
     <div class="container mx-auto p-4 max-w-5xl">
         <h1 class="text-3xl font-black text-center text-indigo-900 my-8 uppercase tracking-tighter italic">
-            🌴 Miami Masters '26 Admin
+            Madrid Masters '26 Admin
         </h1>
 
         <div id="password-view" class="bg-white p-10 rounded-2xl shadow-xl text-center max-w-md mx-auto">
@@ -73,7 +73,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // Updated imports to include collection and getDocs
         import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         const ADMIN_PASSWORD = "your-secret-password"; 
@@ -132,7 +131,6 @@
             if (resultsDoc.exists()) actualResults = resultsDoc.data().winners || {};
         }
 
-        // Fetches real-time participant status from the collection
         async function loadParticipants() {
             const body = document.getElementById('participant-list-body');
             const countEl = document.getElementById('participant-count');
@@ -144,7 +142,6 @@
 
                 querySnap.forEach(doc => {
                     const p = doc.data();
-                    // Filters out ghost documents that have no names yet
                     if (!p.fullName && !p.nickname) return; 
 
                     count++;
@@ -168,12 +165,22 @@
             document.getElementById('password-view').classList.add('hidden');
             document.getElementById('admin-content').classList.remove('hidden');
             renderForms();
-            loadParticipants(); // Trigger participant scan on login
+            loadParticipants(); 
         }
 
         function renderForms() {
-            document.getElementById('mens-results').innerHTML = createFormHTML(tournamentData.mens_draw, 'mens');
-            document.getElementById('womens-results').innerHTML = createFormHTML(tournamentData.womens_draw, 'womens');
+            // Safely render draws only if they exist in the JSON
+            if (tournamentData.mens_draw) {
+                document.getElementById('mens-results').innerHTML = createFormHTML(tournamentData.mens_draw, 'mens');
+            } else {
+                document.getElementById('mens-results').innerHTML = '<p class="text-sm text-gray-400 italic">No Men\'s draw found in tournament data.</p>';
+            }
+
+            if (tournamentData.womens_draw) {
+                document.getElementById('womens-results').innerHTML = createFormHTML(tournamentData.womens_draw, 'womens');
+            } else {
+                document.getElementById('womens-results').innerHTML = '<p class="text-sm text-gray-400 italic">No Women\'s draw found in tournament data.</p>';
+            }
             
             document.getElementById('save-results-btn').onclick = saveResults;
             document.querySelectorAll('select').forEach(sel => sel.onchange = (e) => {
@@ -226,7 +233,11 @@
             const status = document.getElementById('save-status');
             status.textContent = "⌛ Saving...";
             try {
-                await setDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults"), { winners: actualResults });
+                await setDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "results", "actualResults"), { 
+                    winners: actualResults,
+                    // Pass the config toggle down to the Python backend
+                    useRoundBonuses: appConfig.USE_ROUND_BONUSES 
+                });
                 status.textContent = "✅ Saved!";
                 setTimeout(() => status.textContent = '', 3000);
             } catch (err) {

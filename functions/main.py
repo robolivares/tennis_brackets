@@ -18,6 +18,20 @@ BASE_POINTS = {
 
 ROUNDS = ["r128", "r64", "r32", "r16", "qf", "sf", "f"]
 
+MATCHES_PER_ROUND = {
+    'r128': 64, 'r64': 32, 'r32': 16, 'r16': 8, 'qf': 4, 'sf': 2, 'f': 1
+}
+
+# 1.0 = 100%, 0.75 = 75%
+ROUND_BONUSES = {
+    'r128': {1.0: 20, 0.75: 12},
+    'r64':  {1.0: 20, 0.75: 12},
+    'r32':  {1.0: 20, 0.75: 12},
+    'r16':  {1.0: 10, 0.75: 6},
+    'qf':   {1.0: 5,  0.75: 3},
+    'sf':   {1.0: 5}
+}
+
 @firestore_fn.on_document_written(document="tournaments/{tournId}/results/actualResults")
 def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
     tourn_id = event.params["tournId"]
@@ -31,20 +45,25 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
         print(f"Error loading tournament file: {e}")
         return
 
-    # Determine start round based on match count (e.g., 64 matches = r128)
-    match_count = len(initial_entrants.get('mens_draw', []))
+    # Determine start rounds dynamically for both draws
     match_to_round = {64: 'r128', 32: 'r64', 16: 'r32', 8: 'r16'}
-    start_round = match_to_round.get(match_count, 'r128')
+    start_rounds = {
+        'mens_draw': match_to_round.get(len(initial_entrants.get('mens_draw', [])), 'r128'),
+        'womens_draw': match_to_round.get(len(initial_entrants.get('womens_draw', [])), 'r128')
+    }
 
     actual_results_data = event.data.after.to_dict()
     actual_results = actual_results_data.get('winners', {})
+
+    # Grab the toggle state passed from admin.html
+    use_round_bonuses = actual_results_data.get('useRoundBonuses', False)
 
     participants_docs = db.collection('tournaments', tourn_id, 'participants').stream()
     participants = [doc.to_dict() for doc in participants_docs]
 
     seed_map = {
-        'mens': {p[1]: p[0] for m in initial_entrants['mens_draw'] for p in m['players']},
-        'womens': {p[1]: p[0] for m in initial_entrants['womens_draw'] for p in m['players']}
+        'mens': {p[1]: p[0] for m in initial_entrants.get('mens_draw', []) for p in m['players']},
+        'womens': {p[1]: p[0] for m in initial_entrants.get('womens_draw', []) for p in m['players']}
     }
 
     def get_seed_num(name, category):
@@ -52,14 +71,14 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
         if not seed_str or any(x in seed_str for x in ["Q", "WC", "LL"]): return 0
         return int(''.join(filter(str.isdigit, seed_str)))
 
-    eliminated_players = get_eliminated_players(initial_entrants, actual_results, start_round)
+    eliminated_players = get_eliminated_players(initial_entrants, actual_results, start_rounds)
     all_players_set = {p[1] for draw in initial_entrants.values() if isinstance(draw, list) for match in draw for p in match['players']}
     active_players = all_players_set - set(eliminated_players)
 
     leaderboard = []
 
     for p in participants:
-        # UPDATED LOCK LOGIC: Check if ANY day is locked for Mens or Womens (e.g., isLockedMensDay1)
+        # Check if ANY day is locked for Mens or Womens (e.g., isLockedMensDay1)
         is_m_locked = any(val for key, val in p.items() if key.startswith('isLockedMens') and val is True)
         is_w_locked = any(val for key, val in p.items() if key.startswith('isLockedWomens') and val is True)
 
@@ -70,6 +89,10 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
         picks = p.get('picks', {})
         current_score = 0
         potential_score = 0
+
+        # Track picks for round completion bonuses
+        correct_by_round = {'mens': {}, 'womens': {}}
+        potential_by_round = {'mens': {}, 'womens': {}}
 
         for match_id, picked_winner_data in picks.items():
             picked_name = (picked_winner_data[1] if isinstance(picked_winner_data, list) else picked_winner_data).strip()
@@ -91,7 +114,7 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
                 if picked_name == actual_name:
                     bonus = 0
                     is_week_1 = round_key in ["r128", "r64", "r32"]
-                    opp_name = get_opponent_name(match_id, actual_name, initial_entrants, actual_results, start_round)
+                    opp_name = get_opponent_name(match_id, actual_name, initial_entrants, actual_results, start_rounds)
                     w_seed = get_seed_num(actual_name, category)
                     o_seed = get_seed_num(opp_name, category) if opp_name else 0
 
@@ -101,6 +124,9 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
                         bonus = 3 if not is_week_1 else 1
 
                     current_score += (base_points + bonus)
+
+                    # Log a correct pick
+                    correct_by_round[category][round_key] = correct_by_round[category].get(round_key, 0) + 1
 
             elif picked_name in active_players:
                 potential_bonus = 0
@@ -113,6 +139,43 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
                     potential_bonus = 3 if not is_week_1_pot else 1
 
                 potential_score += (base_points + potential_bonus)
+
+                # Log a potential pick
+                potential_by_round[category][round_key] = potential_by_round[category].get(round_key, 0) + 1
+
+        # Calculate and apply round completion bonuses
+        if use_round_bonuses:
+            for cat in ['mens', 'womens']:
+                if cat == 'mens' and not is_m_locked: continue
+                if cat == 'womens' and not is_w_locked: continue
+
+                for r_key, bonus_tiers in ROUND_BONUSES.items():
+                    total_matches = MATCHES_PER_ROUND.get(r_key, 0)
+                    if total_matches == 0: continue
+
+                    correct = correct_by_round[cat].get(r_key, 0)
+                    potential_picks = potential_by_round[cat].get(r_key, 0)
+                    max_possible = correct + potential_picks
+
+                    # Calculate current earned bonus
+                    curr_bonus = 0
+                    if correct == total_matches:
+                        curr_bonus = bonus_tiers.get(1.0, 0)
+                    elif correct >= (total_matches * 0.75):
+                        curr_bonus = bonus_tiers.get(0.75, 0)
+
+                    current_score += curr_bonus
+
+                    # Calculate max potential bonus
+                    pot_bonus = 0
+                    if max_possible == total_matches:
+                        pot_bonus = bonus_tiers.get(1.0, 0)
+                    elif max_possible >= (total_matches * 0.75):
+                        pot_bonus = bonus_tiers.get(0.75, 0)
+
+                    # Add strictly the potential difference
+                    if pot_bonus > curr_bonus:
+                        potential_score += (pot_bonus - curr_bonus)
 
         leaderboard.append({
             "name": p.get('nickname', 'Unknown'),
@@ -132,15 +195,22 @@ def on_results_update(event: firestore_fn.Event[firestore_fn.Change]) -> None:
 
     db.collection('tournaments', tourn_id, 'state').document('viewerData').set(viewer_data)
 
-def get_opponent_name(match_id, winner_name, initial_entrants, actual_results, start_round):
+def get_opponent_name(match_id, winner_name, initial_entrants, actual_results, start_rounds):
     parts = match_id.split('-')
     category_key = 'mens_draw' if match_id.startswith('mens') else 'womens_draw'
     round_key, match_idx = parts[1], int(parts[-1])
 
+    # Fetch the start round specifically for this category
+    start_round = start_rounds.get(category_key, 'r128')
+
     if round_key == start_round:
-        players = initial_entrants[category_key][match_idx]['players']
-        p1, p2 = players[0][1], players[1][1]
-        return p2 if p1 == winner_name else p1
+        draw = initial_entrants.get(category_key, [])
+        # Safely check if the draw exists and the index is valid
+        if match_idx < len(draw):
+            players = draw[match_idx]['players']
+            p1, p2 = players[0][1], players[1][1]
+            return p2 if p1 == winner_name else p1
+        return None
 
     prev_round_idx = ROUNDS.index(round_key) - 1
     prev_round_key = ROUNDS[prev_round_idx]
@@ -156,7 +226,7 @@ def get_opponent_name(match_id, winner_name, initial_entrants, actual_results, s
         return p2 if p1 == winner_name else p1
     return None
 
-def get_eliminated_players(initial_entrants, actual_results, start_round):
+def get_eliminated_players(initial_entrants, actual_results, start_rounds):
     eliminated = set()
     for match_id, winner_data in actual_results.items():
         winner_name = (winner_data[1] if isinstance(winner_data, list) else winner_data).strip()
@@ -164,10 +234,16 @@ def get_eliminated_players(initial_entrants, actual_results, start_round):
         category_key = 'mens_draw' if match_id.startswith('mens') else 'womens_draw'
         round_key, match_idx = parts[1], int(parts[-1])
 
+        # Fetch the start round specifically for this category
+        start_round = start_rounds.get(category_key, 'r128')
+
         p1_name, p2_name = None, None
         if round_key == start_round:
-            p1_name = initial_entrants[category_key][match_idx]['players'][0][1]
-            p2_name = initial_entrants[category_key][match_idx]['players'][1][1]
+            draw = initial_entrants.get(category_key, [])
+            # Safely check if the draw exists and the index is valid
+            if match_idx < len(draw):
+                p1_name = draw[match_idx]['players'][0][1]
+                p2_name = draw[match_idx]['players'][1][1]
         else:
             prev_round_idx = ROUNDS.index(round_key) - 1
             prev_round_key = ROUNDS[prev_round_idx]
@@ -179,4 +255,5 @@ def get_eliminated_players(initial_entrants, actual_results, start_round):
         if p1_name and p2_name:
             if p1_name == winner_name: eliminated.add(p2_name)
             elif p2_name == winner_name: eliminated.add(p1_name)
+            
     return eliminated

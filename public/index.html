@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Miami Masters '26 Challenge</title>
+    <title>Madrid Masters '26 Challenge</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -51,9 +51,7 @@
             </div>
 
             <div id="jump-nav" class="hidden flex flex-wrap justify-center gap-2 py-2 mb-8">
-                <button onclick="document.getElementById('mens-header')?.scrollIntoView({behavior: 'smooth'})" class="text-[10px] font-black uppercase px-4 py-1 bg-indigo-100 text-indigo-700 rounded-full">Jump to Men's</button>
-                <button onclick="document.getElementById('womens-header')?.scrollIntoView({behavior: 'smooth'})" class="text-[10px] font-black uppercase px-4 py-1 bg-pink-100 text-pink-700 rounded-full">Jump to Women's</button>
-            </div>
+                </div>
         </header>
 
         <div id="main-content" class="min-h-[400px]"></div>
@@ -122,13 +120,13 @@
 
         <div id="submission-bar" class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t p-6 shadow-2xl flex flex-col md:flex-row justify-center items-center gap-6 z-50">
              <div class="flex flex-col gap-1">
-                <div class="flex justify-between text-[10px] font-black uppercase">
-                    <span id="w-counter" class="text-pink-600">W: 0 / 0</span>
-                    <span id="m-counter" class="text-indigo-600">M: 0 / 0</span>
+                <div class="flex justify-between text-[10px] font-black uppercase gap-4">
+                    <span id="w-counter" class="text-pink-600 hidden">W: 0 / 0</span>
+                    <span id="m-counter" class="text-indigo-600 hidden">M: 0 / 0</span>
                 </div>
                 <div class="w-64 bg-slate-200 rounded-full h-3 flex overflow-hidden">
-                    <div id="w-progress" class="bg-pink-500 h-3 transition-all" style="width: 0%"></div>
-                    <div id="m-progress" class="bg-indigo-600 h-3 transition-all" style="width: 0%"></div>
+                    <div id="w-progress" class="bg-pink-500 h-3 transition-all hidden" style="width: 0%"></div>
+                    <div id="m-progress" class="bg-indigo-600 h-3 transition-all hidden" style="width: 0%"></div>
                 </div>
              </div>
              <button id="lock-btn" class="bg-indigo-950 text-white px-12 py-3 rounded-full font-black uppercase tracking-widest disabled:opacity-20 cursor-pointer shadow-lg" disabled>Lock Bracket</button>
@@ -144,6 +142,7 @@
         let currentView = 'bracket';
         let activeViewerIdx = -1; 
         let activeCategory = 'mens';
+        let activeCategories = []; // Dynamically updated based on JSON
         let seedLookup = {};
         let sortConfig = { key: 'score', direction: 'desc' };
 
@@ -170,7 +169,6 @@
 
             activeRounds = ALL_ROUNDS.slice(ALL_ROUNDS.findIndex(r => r.key === (appConfig.STARTING_ROUND || 'r32')));
             
-            // Set dynamic rule labels
             const startLabel = (appConfig.STARTING_ROUND || 'r32').toUpperCase();
             if(document.getElementById('rules-start-round-1')) document.getElementById('rules-start-round-1').innerText = startLabel;
 
@@ -180,7 +178,13 @@
 
             const res = await fetch(`tournament_data.json?v=${Date.now()}`);
             tournamentData = await res.json();
-            ['mens', 'womens'].forEach(cat => {
+            
+            // Detect which draws exist in the file safely
+            if (tournamentData.mens_draw) activeCategories.push('mens');
+            if (tournamentData.womens_draw) activeCategories.push('womens');
+            activeCategory = activeCategories[0] || 'mens';
+
+            activeCategories.forEach(cat => {
                 tournamentData[`${cat}_draw`].forEach(match => {
                     match.players.forEach(p => {
                         const parsed = parseP(p);
@@ -188,6 +192,16 @@
                     });
                 });
             });
+
+            // Make UI elements visible based on what data exists
+            if (tournamentData.mens_draw) {
+                document.getElementById('m-counter').classList.remove('hidden');
+                document.getElementById('m-progress').classList.remove('hidden');
+            }
+            if (tournamentData.womens_draw) {
+                document.getElementById('w-counter').classList.remove('hidden');
+                document.getElementById('w-progress').classList.remove('hidden');
+            }
 
             if (appConfig.VIEWER_MODE_ENABLED) {
                 onSnapshot(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "state", "viewerData"), (snap) => {
@@ -205,7 +219,13 @@
                             await setDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", targetUID), { picks: {}, syncCode: newCode });
                             return;
                         }
+                        
                         userProfile = snap.data();
+                        
+                        // PRE-FILL THE NAMES IF THEY EXIST
+                        if (userProfile.nickname) document.getElementById('bracket-nickname').value = userProfile.nickname;
+                        if (userProfile.fullName) document.getElementById('user-fullname').value = userProfile.fullName;
+
                         if (userProfile.syncCode) {
                             document.getElementById('token-card').classList.remove('hidden');
                             document.getElementById('token-display').innerText = userProfile.syncCode;
@@ -239,6 +259,17 @@
 
         function render() {
             const content = document.getElementById('main-content');
+            
+            // Build dynamic jump nav
+            const jumpNav = document.getElementById('jump-nav');
+            jumpNav.innerHTML = '';
+            if (tournamentData.mens_draw) {
+                jumpNav.innerHTML += `<button onclick="document.getElementById('mens-header')?.scrollIntoView({behavior: 'smooth'})" class="text-[10px] font-black uppercase px-4 py-1 bg-indigo-100 text-indigo-700 rounded-full">Jump to Men's</button>`;
+            }
+            if (tournamentData.womens_draw) {
+                jumpNav.innerHTML += `<button onclick="document.getElementById('womens-header')?.scrollIntoView({behavior: 'smooth'})" class="text-[10px] font-black uppercase px-4 py-1 bg-pink-100 text-pink-700 rounded-full">Jump to Women's</button>`;
+            }
+
             if (appConfig.VIEWER_MODE_ENABLED) {
                 if (viewerData) renderViewer(content);
             } else if (userProfile) {
@@ -270,13 +301,12 @@
 
             const getIcon = (key) => sortConfig.key === key ? (sortConfig.direction === 'desc' ? ' ↓' : ' ↑') : '';
 
-            // Stats Logic
             const mChampCounts = {}; const wChampCounts = {}; const darkHorseCounts = {};
             participants.forEach(p => {
                 if (!p.picks) return;
                 const mC = parseP(p.picks['mens-f-match-0']); if (mC.name !== 'TBD') mChampCounts[mC.name] = (mChampCounts[mC.name] || 0) + 1;
                 const wC = parseP(p.picks['womens-f-match-0']); if (wC.name !== 'TBD') wChampCounts[wC.name] = (wChampCounts[wC.name] || 0) + 1;
-                ['mens', 'womens'].forEach(cat => {
+                activeCategories.forEach(cat => {
                     for(let i=0; i<8; i++){
                         const pick = p.picks[`${cat}-r16-match-${i}`];
                         if (pick) {
@@ -296,7 +326,6 @@
                     <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="${color} h-1.5 rounded-full" style="width: ${(count/participants.length)*100}%"></div></div>
                 </div>`).join('');
 
-            // RESTORED: Participant Selection Buttons
             const selectorButtonsHTML = `
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-10">
                     <button onclick="window.setViewer(-1)" class="py-3 px-2 rounded-xl border-2 font-black uppercase text-[10px] transition-all ${activeViewerIdx === -1 ? 'bg-indigo-950 text-white border-indigo-950 shadow-lg' : 'bg-white text-indigo-950 border-slate-100 hover:border-indigo-200'}">Actual Results</button>
@@ -305,6 +334,24 @@
                         return `<button onclick="window.setViewer(${originalIdx})" class="py-3 px-2 rounded-xl border-2 font-black uppercase text-[10px] transition-all ${activeViewerIdx === originalIdx ? 'bg-indigo-950 text-white border-indigo-950 shadow-lg' : 'bg-white text-indigo-950 border-slate-100 hover:border-indigo-200'}">${p.name}</button>`;
                     }).join('')}
                 </div>`;
+
+            let categoryToggles = '';
+            if (activeCategories.length > 1) {
+                categoryToggles = `
+                <div class="flex justify-center gap-3">
+                    <button onclick="window.setCategory('mens')" class="px-8 py-2 rounded-full font-black uppercase text-[10px] border-2 ${activeCategory === 'mens' ? 'bg-indigo-900 text-white border-indigo-900' : 'bg-white text-slate-400'}">Men's</button>
+                    <button onclick="window.setCategory('womens')" class="px-8 py-2 rounded-full font-black uppercase text-[10px] border-2 ${activeCategory === 'womens' ? 'bg-indigo-900 text-white border-indigo-900' : 'bg-white text-slate-400'}">Women's</button>
+                </div>`;
+            }
+
+            let statBoxes = '';
+            if (tournamentData.mens_draw) {
+                statBoxes += `<div class="bg-white p-5 rounded-3xl border"><h4 class="text-[9px] font-black text-indigo-500 uppercase mb-4">Men's Champ</h4>${renderBars(mChampCounts, 'bg-indigo-500')}</div>`;
+            }
+            if (tournamentData.womens_draw) {
+                statBoxes += `<div class="bg-white p-5 rounded-3xl border"><h4 class="text-[9px] font-black text-pink-500 uppercase mb-4">Women's Champ</h4>${renderBars(wChampCounts, 'bg-pink-500')}</div>`;
+            }
+            statBoxes += `<div class="bg-white p-5 rounded-3xl border"><h4 class="text-[9px] font-black text-emerald-500 uppercase mb-4">Popular Dark Horses</h4>${renderBars(darkHorseCounts, 'bg-emerald-500')}</div>`;
 
             container.innerHTML = `
                 <div class="max-w-4xl mx-auto mb-12">
@@ -339,18 +386,13 @@
                         <h3 class="text-2xl font-black text-indigo-950 uppercase italic mb-4">
                             ${activeViewerIdx === -1 ? "Official Results" : viewerData.participants[activeViewerIdx].name + "'s Picks"}
                         </h3>
-                        <div class="flex justify-center gap-3">
-                            <button onclick="window.setCategory('mens')" class="px-8 py-2 rounded-full font-black uppercase text-[10px] border-2 ${activeCategory === 'mens' ? 'bg-indigo-900 text-white border-indigo-900' : 'bg-white text-slate-400'}">Men's</button>
-                            <button onclick="window.setCategory('womens')" class="px-8 py-2 rounded-full font-black uppercase text-[10px] border-2 ${activeCategory === 'womens' ? 'bg-indigo-900 text-white border-indigo-900' : 'bg-white text-slate-400'}">Women's</button>
-                        </div>
+                        ${categoryToggles}
                     </div>
 
                     <div id="viewer-bracket-display"></div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12">
-                        <div class="bg-white p-5 rounded-3xl border"><h4 class="text-[9px] font-black text-indigo-500 uppercase mb-4">Men's Champ</h4>${renderBars(mChampCounts, 'bg-indigo-500')}</div>
-                        <div class="bg-white p-5 rounded-3xl border"><h4 class="text-[9px] font-black text-pink-500 uppercase mb-4">Women's Champ</h4>${renderBars(wChampCounts, 'bg-pink-500')}</div>
-                        <div class="bg-white p-5 rounded-3xl border"><h4 class="text-[9px] font-black text-emerald-500 uppercase mb-4">Popular Dark Horses</h4>${renderBars(darkHorseCounts, 'bg-emerald-500')}</div>
+                        ${statBoxes}
                     </div>
                 </div>`;
             
@@ -388,16 +430,24 @@
             if (currentView === 'list') {
                 renderList(content);
             } else {
-                content.innerHTML = `
-                    <div class="mb-24"><h2 id="mens-header" class="text-3xl font-black text-indigo-950 border-l-8 border-indigo-600 pl-4 mb-4 uppercase italic">Men</h2><div id="mens-container"></div></div>
-                    <div><h2 id="womens-header" class="text-3xl font-black text-indigo-900 border-l-8 border-pink-500 pl-4 mb-4 uppercase italic">Women</h2><div id="womens-container"></div></div>`;
-                renderBracket('mens-container', 'mens'); renderBracket('womens-container', 'womens');
+                let html = '';
+                if (tournamentData.mens_draw) {
+                    html += `<div class="mb-24"><h2 id="mens-header" class="text-3xl font-black text-indigo-950 border-l-8 border-indigo-600 pl-4 mb-4 uppercase italic">Men</h2><div id="mens-container"></div></div>`;
+                }
+                if (tournamentData.womens_draw) {
+                    html += `<div><h2 id="womens-header" class="text-3xl font-black text-indigo-900 border-l-8 border-pink-500 pl-4 mb-4 uppercase italic">Women</h2><div id="womens-container"></div></div>`;
+                }
+                content.innerHTML = html;
+                if (tournamentData.mens_draw) renderBracket('mens-container', 'mens'); 
+                if (tournamentData.womens_draw) renderBracket('womens-container', 'womens');
             }
         }
 
         function renderBracket(id, cat) {
             const el = document.getElementById(id);
+            if (!el) return;
             el.className = 'bracket-container';
+            const capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
             activeRounds.forEach((round, rIdx) => {
                 const col = document.createElement('div'); col.className = 'round'; col.innerHTML = `<div class="round-title">${round.key.toUpperCase()}</div>`;
                 const container = document.createElement('div'); container.className = 'matchup-container';
@@ -406,7 +456,12 @@
                     const players = getPlayers(cat, rIdx, i);
                     const pickName = parseP((userProfile.picks || {})[mId]).name;
                     const mData = findMatchById(mId);
-                    const isLocked = mData && userProfile[`isLocked${cat.charAt(0).toUpperCase() + cat.slice(1)}Day${mData.day}`];
+                    
+                    // FIXED LOCK LOGIC:
+                    const isFullyLocked = userProfile[`isLocked${capCat}Day2`];
+                    const isDayLocked = mData && userProfile[`isLocked${capCat}Day${mData.day}`];
+                    const isLocked = isFullyLocked || isDayLocked;
+                    
                     const matchup = document.createElement('div'); matchup.className = 'matchup';
                     matchup.innerHTML = players.map(rawP => {
                         const p = parseP(rawP);
@@ -421,7 +476,9 @@
         }
 
         function renderList(content) {
-            content.innerHTML = `<div class="max-w-xl mx-auto space-y-8">${['mens', 'womens'].map(cat => `
+            content.innerHTML = `<div class="max-w-xl mx-auto space-y-8">${activeCategories.map(cat => {
+                const capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
+                return `
                 <div class="bg-white p-6 rounded-3xl shadow-sm border">
                     <h2 class="text-2xl font-black text-indigo-950 mb-4 uppercase italic">${cat}</h2>
                     ${activeRounds.map((round, rIdx) => `
@@ -431,7 +488,12 @@
                                 const players = getPlayers(cat, rIdx, i);
                                 const pickName = parseP((userProfile.picks || {})[mId]).name;
                                 const mData = findMatchById(mId);
-                                const isL = mData && userProfile[`isLocked${cat.charAt(0).toUpperCase() + cat.slice(1)}Day${mData.day}`];
+                                
+                                // FIXED LOCK LOGIC:
+                                const isFullyLocked = userProfile[`isLocked${capCat}Day2`];
+                                const isDayLocked = mData && userProfile[`isLocked${capCat}Day${mData.day}`];
+                                const isL = isFullyLocked || isDayLocked;
+                                
                                 return `<div class="flex gap-2">${players.map(rawP => {
                                     const p = parseP(rawP);
                                     const isSel = pickName === p.name && p.name !== 'TBD';
@@ -439,8 +501,10 @@
                                     return `<button ${click} class="flex-1 py-3 px-3 text-left rounded-xl border-2 font-bold text-[11px] transition-all ${isSel ? 'bg-indigo-900 text-white border-indigo-900' : 'bg-slate-50 text-indigo-900 border-transparent'} ${isL ? 'opacity-40 cursor-not-allowed' : ''}"><span class="opacity-50 mr-1 w-4 inline-block">${p.seed}</span> ${p.name}</button>`;
                                 }).join('')}</div>`;
                             }).join('')}
-                        </div></div>`).join('')}
-                </div>`).join('')}</div>`;
+                        </div></div>`
+                    ).join('')}
+                </div>`
+            }).join('')}</div>`;
         }
 
         function getPlayers(cat, rIdx, mIdx) {
@@ -465,8 +529,14 @@
 
         window.makePick = async (id, playerArray) => {
             const cat = id.startsWith('mens') ? 'mens' : 'womens';
+            const capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
             const mData = findMatchById(id);
-            if (mData && userProfile[`isLocked${cat.charAt(0).toUpperCase() + cat.slice(1)}Day${mData.day}`]) return;
+            
+            // FIXED LOCK LOGIC:
+            const isFullyLocked = userProfile[`isLocked${capCat}Day2`];
+            const isDayLocked = mData && userProfile[`isLocked${capCat}Day${mData.day}`];
+            if (isFullyLocked || isDayLocked) return;
+
             if (playerArray[1] === 'TBD') return;
             let picks = { ...(userProfile.picks || {}), [id]: playerArray };
             const parts = id.split('-');
@@ -481,13 +551,20 @@
             if (!confirm("Auto-fill picks?")) return;
             const targetUID = localStorage.getItem('syncUID') || auth.currentUser.uid;
             let simPicks = { ...(userProfile.picks || {}) };
-            ['mens', 'womens'].forEach(cat => {
+            activeCategories.forEach(cat => {
+                const capCat = cat.charAt(0).toUpperCase() + cat.slice(1);
                 activeRounds.forEach((round, rIdx) => {
                     for (let i = 0; i < round.matches; i++) {
                         const mId = `${cat}-${round.key}-match-${i}`;
                         const mData = findMatchById(mId);
-                        const isL = mData && userProfile[`isLocked${cat.charAt(0).toUpperCase() + cat.slice(1)}Day${mData.day}`];
+                        
+                        // FIXED LOCK LOGIC:
+                        const isFullyLocked = userProfile[`isLocked${capCat}Day2`];
+                        const isDayLocked = mData && userProfile[`isLocked${capCat}Day${mData.day}`];
+                        const isL = isFullyLocked || isDayLocked;
+                        
                         if (isL || simPicks[mId]) continue;
+                        
                         let p1 = rIdx === 0 ? tournamentData[`${cat}_draw`][i].players[0] : (simPicks[`${cat}-${activeRounds[rIdx-1].key}-match-${i * 2}`] || ['', 'TBD']);
                         if (p1 && p1[1] !== 'TBD') simPicks[mId] = p1;
                     }
@@ -499,25 +576,38 @@
         function updateProgress() {
             const picks = userProfile ? userProfile.picks || {} : {};
             const perDrawTotal = activeRounds.reduce((acc, r) => acc + r.matches, 0);
+            
             const wPicks = Object.keys(picks).filter(k => k.startsWith('womens')).length;
             const mPicks = Object.keys(picks).filter(k => k.startsWith('mens')).length;
 
-            document.getElementById('w-counter').innerText = `W: ${wPicks} / ${perDrawTotal}`;
-            document.getElementById('m-counter').innerText = `M: ${mPicks} / ${perDrawTotal}`;
-            document.getElementById('w-progress').style.width = `${(wPicks / (perDrawTotal * 2)) * 100}%`;
-            document.getElementById('m-progress').style.width = `${(mPicks / (perDrawTotal * 2)) * 100}%`;
+            let totalDivisor = activeCategories.length * perDrawTotal;
+
+            if (tournamentData.womens_draw) {
+                document.getElementById('w-counter').innerText = `W: ${wPicks} / ${perDrawTotal}`;
+                document.getElementById('w-progress').style.width = `${(wPicks / totalDivisor) * 100}%`;
+            }
+            if (tournamentData.mens_draw) {
+                document.getElementById('m-counter').innerText = `M: ${mPicks} / ${perDrawTotal}`;
+                document.getElementById('m-progress').style.width = `${(mPicks / totalDivisor) * 100}%`;
+            }
 
             const curD = appConfig ? appConfig.CURRENT_TOURNAMENT_DAY : 1;
-            let canLock = false;
+            let canLock = true;
 
             if (curD >= 2) {
-                canLock = (wPicks + mPicks) === (perDrawTotal * 2);
+                if (tournamentData.womens_draw) canLock = canLock && (wPicks === perDrawTotal);
+                if (tournamentData.mens_draw) canLock = canLock && (mPicks === perDrawTotal);
             } else {
-                const wD1Total = tournamentData.womens_draw.filter(m => m.day === 1).length;
-                const mD1Total = tournamentData.mens_draw.filter(m => m.day === 1).length;
-                const wD1Filled = Object.keys(picks).filter(k => { const m = findMatchById(k); return k.startsWith('womens') && m && m.day === 1; }).length === wD1Total;
-                const mD1Filled = Object.keys(picks).filter(k => { const m = findMatchById(k); return k.startsWith('mens') && m && m.day === 1; }).length === mD1Total;
-                canLock = wD1Filled && mD1Filled;
+                if (tournamentData.womens_draw) {
+                    const wD1Total = tournamentData.womens_draw.filter(m => m.day === 1).length;
+                    const wD1Filled = Object.keys(picks).filter(k => { const m = findMatchById(k); return k.startsWith('womens') && m && m.day === 1; }).length === wD1Total;
+                    canLock = canLock && wD1Filled;
+                }
+                if (tournamentData.mens_draw) {
+                    const mD1Total = tournamentData.mens_draw.filter(m => m.day === 1).length;
+                    const mD1Filled = Object.keys(picks).filter(k => { const m = findMatchById(k); return k.startsWith('mens') && m && m.day === 1; }).length === mD1Total;
+                    canLock = canLock && mD1Filled;
+                }
             }
 
             const lockBtn = document.getElementById('lock-btn');
@@ -539,13 +629,14 @@
             
             let up = { nickname: n, fullName: fn };
             if (curD >= 2) {
-                up[`isLockedWomensDay1`] = true; up[`isLockedMensDay1`] = true;
-                up[`isLockedWomensDay2`] = true; up[`isLockedMensDay2`] = true;
+                if (tournamentData.womens_draw) { up[`isLockedWomensDay1`] = true; up[`isLockedWomensDay2`] = true; }
+                if (tournamentData.mens_draw) { up[`isLockedMensDay1`] = true; up[`isLockedMensDay2`] = true; }
                 if (confirm(`This will lock your entire bracket for the rest of the tournament. Proceed?`)) {
                     await setDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", targetUID), up, { merge: true });
                 }
             } else {
-                up[`isLockedWomensDay${curD}`] = true; up[`isLockedMensDay${curD}`] = true;
+                if (tournamentData.womens_draw) up[`isLockedWomensDay${curD}`] = true;
+                if (tournamentData.mens_draw) up[`isLockedMensDay${curD}`] = true;
                 if (confirm(`Lock Day ${curD} matches?`)) {
                     await setDoc(doc(db, "tournaments", appConfig.TOURNAMENT_ID, "participants", targetUID), up, { merge: true });
                 }
